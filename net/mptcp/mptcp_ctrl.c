@@ -319,7 +319,11 @@ static void mptcp_reqsk_new_mptcp(struct request_sock *req,
 	spin_unlock(&mptcp_tk_hashlock);
 	local_bh_enable();
 	rcu_read_unlock();
-	mtreq->mptcp_rem_key = mopt->mptcp_sender_key;
+
+	if (mtreq->mptcp_ver == MPTCP_VERSION_0) {
+		mtreq->mptcp_rem_key = mopt->mptcp_sender_key;
+		mtreq->rem_key_set = 1;
+	}
 }
 
 static int mptcp_reqsk_new_cookie(struct request_sock *req,
@@ -355,7 +359,10 @@ static int mptcp_reqsk_new_cookie(struct request_sock *req,
 	local_bh_enable();
 	rcu_read_unlock();
 
-	mtreq->mptcp_rem_key = mopt->mptcp_sender_key;
+	if (mtreq->mptcp_ver == MPTCP_VERSION_0) {
+		mtreq->mptcp_rem_key = mopt->mptcp_sender_key;
+		mtreq->rem_key_set = 1;
+	}
 
 	return true;
 }
@@ -1145,8 +1152,27 @@ static const struct tcp_sock_ops mptcp_sub_specific = {
 	.cleanup_rbuf			= tcp_cleanup_rbuf,
 };
 
+void mptcp_initialize_recv_vars(struct tcp_sock *meta_tp, struct mptcp_cb *mpcb,
+				__u64 remote_key)
+{
+	u64 idsn;
+
+	mpcb->mptcp_rem_key = remote_key;
+	mpcb->rem_key_set = 1;
+	mptcp_key_sha1(mpcb->mptcp_rem_key, &mpcb->mptcp_rem_token, &idsn);
+
+	idsn = ntohll(idsn) + 1;
+	mpcb->rcv_high_order[0] = idsn >> 32;
+	mpcb->rcv_high_order[1] = mpcb->rcv_high_order[0] + 1;
+	meta_tp->copied_seq = (u32)idsn;
+	meta_tp->rcv_nxt = (u32)idsn;
+	meta_tp->rcv_wup = (u32)idsn;
+
+	meta_tp->snd_wl1 = meta_tp->rcv_nxt - 1;
+}
+
 static int mptcp_alloc_mpcb(struct sock *meta_sk, __u64 remote_key,
-			    __u8 mptcp_ver, u32 window)
+			    int rem_key_set, __u8 mptcp_ver, u32 window)
 {
 	struct mptcp_cb *mpcb;
 	struct sock *master_sk;
@@ -1183,12 +1209,6 @@ static int mptcp_alloc_mpcb(struct sock *meta_sk, __u64 remote_key,
 	snd_idsn++;
 	mpcb->snd_high_order[0] = snd_idsn >> 32;
 	mpcb->snd_high_order[1] = mpcb->snd_high_order[0] - 1;
-
-	mpcb->mptcp_rem_key = remote_key;
-	mptcp_key_sha1(mpcb->mptcp_rem_key, &mpcb->mptcp_rem_token, &rcv_idsn);
-	rcv_idsn++;
-	mpcb->rcv_high_order[0] = rcv_idsn >> 32;
-	mpcb->rcv_high_order[1] = mpcb->rcv_high_order[0] + 1;
 
 	mpcb->meta_sk = meta_sk;
 	mpcb->master_sk = master_sk;
@@ -1306,7 +1326,9 @@ static int mptcp_alloc_mpcb(struct sock *meta_sk, __u64 remote_key,
 	meta_tp->rcv_nxt = (u32)rcv_idsn;
 	meta_tp->rcv_wup = (u32)rcv_idsn;
 
-	meta_tp->snd_wl1 = meta_tp->rcv_nxt - 1;
+	if (rem_key_set)
+		mptcp_initialize_recv_vars(meta_tp, mpcb, remote_key);
+
 	meta_tp->snd_wnd = window;
 	meta_tp->retrans_stamp = 0; /* Set in tcp_connect() */
 
@@ -2053,12 +2075,12 @@ bool mptcp_doit(struct sock *sk)
 }
 
 int mptcp_create_master_sk(struct sock *meta_sk, __u64 remote_key,
-			   __u8 mptcp_ver, u32 window)
+			   int rem_key_set, __u8 mptcp_ver, u32 window)
 {
 	struct tcp_sock *master_tp;
 	struct sock *master_sk;
 
-	if (mptcp_alloc_mpcb(meta_sk, remote_key, mptcp_ver, window))
+	if (mptcp_alloc_mpcb(meta_sk, remote_key, rem_key_set, mptcp_ver, window))
 		goto err_alloc_mpcb;
 
 	master_sk = tcp_sk(meta_sk)->mpcb->master_sk;
@@ -2086,6 +2108,7 @@ err_alloc_mpcb:
 }
 
 static int __mptcp_check_req_master(struct sock *child,
+				    const struct mptcp_options_received *mopt,
 				    struct request_sock *req)
 {
 	struct tcp_sock *child_tp = tcp_sk(child);
@@ -2096,6 +2119,8 @@ static int __mptcp_check_req_master(struct sock *child,
 	/* Never contained an MP_CAPABLE */
 	if (!inet_rsk(req)->mptcp_rqsk)
 		return 1;
+
+	mtreq = mptcp_rsk(req);
 
 	if (!inet_rsk(req)->saw_mpc) {
 		/* Fallback to regular TCP, because we saw one SYN without
@@ -2108,15 +2133,21 @@ static int __mptcp_check_req_master(struct sock *child,
 		return 1;
 	}
 
+	/* mopt can be NULL when coming from FAST-OPEN */
+	if (mopt && mopt->saw_mpc && mtreq->mptcp_ver == MPTCP_VERSION_1) {
+		mtreq->mptcp_rem_key = mopt->mptcp_sender_key;
+		mtreq->rem_key_set = 1;
+	}
+
 	MPTCP_INC_STATS(sock_net(meta_sk), MPTCP_MIB_MPCAPABLEPASSIVEACK);
 
 	/* Just set this values to pass them to mptcp_alloc_mpcb */
-	mtreq = mptcp_rsk(req);
 	child_tp->mptcp_loc_key = mtreq->mptcp_loc_key;
 	child_tp->mptcp_loc_token = mtreq->mptcp_loc_token;
 
 	if (mptcp_create_master_sk(meta_sk, mtreq->mptcp_rem_key,
-				   mtreq->mptcp_ver, child_tp->snd_wnd)) {
+				   mtreq->rem_key_set, mtreq->mptcp_ver,
+				   child_tp->snd_wnd)) {
 		inet_csk_prepare_forced_close(meta_sk);
 		tcp_done(meta_sk);
 
@@ -2151,7 +2182,7 @@ int mptcp_check_req_fastopen(struct sock *child, struct request_sock *req)
 	u32 new_mapping;
 	int ret;
 
-	ret = __mptcp_check_req_master(child, req);
+	ret = __mptcp_check_req_master(child, NULL, req);
 	if (ret)
 		return ret;
 
@@ -2199,12 +2230,13 @@ int mptcp_check_req_fastopen(struct sock *child, struct request_sock *req)
 
 int mptcp_check_req_master(struct sock *sk, struct sock *child,
 			   struct request_sock *req, const struct sk_buff *skb,
+			   const struct mptcp_options_received *mopt,
 			   int drop, u32 tsoff)
 {
 	struct sock *meta_sk = child;
 	int ret;
 
-	ret = __mptcp_check_req_master(child, req);
+	ret = __mptcp_check_req_master(child, mopt, req);
 	if (ret)
 		return ret;
 	child = tcp_sk(child)->mpcb->master_sk;
@@ -2573,8 +2605,10 @@ void mptcp_cookies_reqsk_init(struct request_sock *req,
 	/* Absolutely need to always initialize this. */
 	mtreq->hash_entry.pprev = NULL;
 
+	mtreq->mptcp_ver = mopt->mptcp_ver;
 	mtreq->mptcp_rem_key = mopt->mptcp_sender_key;
 	mtreq->mptcp_loc_key = mopt->mptcp_receiver_key;
+	mtreq->rem_key_set = 1;
 
 	/* Generate the token */
 	mptcp_key_sha1(mtreq->mptcp_loc_key, &mtreq->mptcp_loc_token, NULL);
