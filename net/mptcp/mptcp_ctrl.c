@@ -1178,7 +1178,7 @@ static int mptcp_alloc_mpcb(struct sock *meta_sk, __u64 remote_key,
 	struct sock *master_sk;
 	struct inet_connection_sock *meta_icsk = inet_csk(meta_sk);
 	struct tcp_sock *master_tp, *meta_tp = tcp_sk(meta_sk);
-	u64 snd_idsn, rcv_idsn;
+	u64 snd_idsn;
 
 	dst_release(meta_sk->sk_rx_dst);
 	meta_sk->sk_rx_dst = NULL;
@@ -1321,10 +1321,6 @@ static int mptcp_alloc_mpcb(struct sock *meta_sk, __u64 remote_key,
 	meta_tp->snd_nxt = meta_tp->write_seq;
 	meta_tp->pushed_seq = meta_tp->write_seq;
 	meta_tp->snd_up = meta_tp->write_seq;
-
-	meta_tp->copied_seq = (u32)rcv_idsn;
-	meta_tp->rcv_nxt = (u32)rcv_idsn;
-	meta_tp->rcv_wup = (u32)rcv_idsn;
 
 	if (rem_key_set)
 		mptcp_initialize_recv_vars(meta_tp, mpcb, remote_key);
