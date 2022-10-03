@@ -111,6 +111,7 @@ static int __mptcp_socket_create(struct mptcp_sock *msk)
 	if (err)
 		return err;
 
+	pr_err("matttbe: socket created: sk: %p, ssk: %p (%p %p)\n", sk, ssock->sk, sk->sk_socket, ssock->sk->sk_socket);
 	msk->first = ssock->sk;
 	msk->subflow = ssock;
 	subflow = mptcp_subflow_ctx(ssock->sk);
@@ -1664,6 +1665,34 @@ static void mptcp_set_nospace(struct sock *sk)
 	set_bit(MPTCP_NOSPACE, &mptcp_sk(sk)->flags);
 }
 
+static void mptcp_subflow_early_fallback(struct mptcp_sock *msk,
+					 struct mptcp_subflow_context *subflow)
+{
+	subflow->request_mptcp = 0;
+	__mptcp_do_fallback(msk);
+}
+
+static void __mptcp_pre_connect(struct mptcp_sock *msk, struct sock *ssk)
+{
+	struct mptcp_subflow_context *subflow;
+
+	mptcp_token_destroy(msk);
+	subflow = mptcp_subflow_ctx(ssk);
+#ifdef CONFIG_TCP_MD5SIG
+	/* no MPTCP if MD5SIG is enabled on this socket or we may run out of
+	 * TCP option space.
+	 */
+	if (rcu_access_pointer(tcp_sk(ssk)->md5sig_info))
+		mptcp_subflow_early_fallback(msk, subflow);
+#endif
+	if (subflow->request_mptcp && mptcp_token_new_connect(ssk)) {
+		MPTCP_INC_STATS(sock_net(ssk), MPTCP_MIB_TOKENFALLBACKINIT);
+		mptcp_subflow_early_fallback(msk, subflow);
+	}
+	if (likely(!__mptcp_check_fallback(msk)))
+		MPTCP_INC_STATS(sock_net(ssk), MPTCP_MIB_MPCAPABLEACTIVE);
+}
+
 static int mptcp_sendmsg(struct sock *sk, struct msghdr *msg, size_t len)
 {
 	struct mptcp_sock *msk = mptcp_sk(sk);
@@ -1673,21 +1702,22 @@ static int mptcp_sendmsg(struct sock *sk, struct msghdr *msg, size_t len)
 	int ret = 0;
 	long timeo;
 
-	/* we don't support FASTOPEN yet */
-	if (msg->msg_flags & MSG_FASTOPEN)
-		return -EOPNOTSUPP;
-
 	/* silently ignore everything else */
-	msg->msg_flags &= MSG_MORE | MSG_DONTWAIT | MSG_NOSIGNAL;
+	msg->msg_flags &= MSG_MORE | MSG_DONTWAIT | MSG_NOSIGNAL | MSG_FASTOPEN;
 
 	lock_sock(sk);
 
 	ssock = __mptcp_nmpc_socket(msk);
-	if (unlikely(ssock && inet_sk(ssock->sk)->defer_connect)) {
+	if (unlikely(ssock && (inet_sk(ssock->sk)->defer_connect ||
+			       msg->msg_flags & MSG_FASTOPEN))) {
 		struct sock *ssk = ssock->sk;
 		int copied_syn = 0;
 
 		lock_sock(ssk);
+		if (msg->msg_flags & MSG_FASTOPEN && sk->sk_state == TCP_CLOSE)
+			__mptcp_pre_connect(msk, ssk);
+
+		pr_err("matttbe: sendmsg fastopen sk: %p, ssk: %p (%p %p)\n", sk, ssk, sk->sk_socket, ssk->sk_socket);
 
 		ret = tcp_sendmsg_fastopen(ssk, msg, &copied_syn, len, NULL);
 		copied += copied_syn;
@@ -3559,13 +3589,6 @@ static int mptcp_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 unlock:
 	release_sock(sock->sk);
 	return err;
-}
-
-static void mptcp_subflow_early_fallback(struct mptcp_sock *msk,
-					 struct mptcp_subflow_context *subflow)
-{
-	subflow->request_mptcp = 0;
-	__mptcp_do_fallback(msk);
 }
 
 static int mptcp_stream_connect(struct socket *sock, struct sockaddr *uaddr,
