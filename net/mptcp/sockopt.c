@@ -1216,12 +1216,20 @@ int mptcp_getsockopt(struct sock *sk, int level, int optname,
 
 	pr_debug("msk=%p", msk);
 
-	/* @@ the meaning of setsockopt() when the socket is connected and
+	if (unlikely(sk->sk_prot == &tcp_prot)) {
+		pr_warn("matttbe: TODO, it is not an MPTCP socket, msk=%p\n", msk);
+		return -EFAULT;
+	}
+
+	/* @@ the meaning of getsockopt() when the socket is connected and
 	 * there are multiple subflows is not yet defined. It is up to the
 	 * MPTCP-level socket to configure the subflows until the subflow
 	 * is in TCP fallback, when socket options are passed through
 	 * to the one remaining subflow.
 	 */
+	if (level == SOL_MPTCP)
+		return mptcp_getsockopt_sol_mptcp(msk, optname, optval, option);
+
 	lock_sock(sk);
 	ssk = __mptcp_tcp_fallback(msk);
 	release_sock(sk);
@@ -1232,8 +1240,6 @@ int mptcp_getsockopt(struct sock *sk, int level, int optname,
 		return mptcp_getsockopt_v4(msk, optname, optval, option);
 	if (level == SOL_TCP)
 		return mptcp_getsockopt_sol_tcp(msk, optname, optval, option);
-	if (level == SOL_MPTCP)
-		return mptcp_getsockopt_sol_mptcp(msk, optname, optval, option);
 	return -EOPNOTSUPP;
 }
 

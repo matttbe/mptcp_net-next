@@ -262,6 +262,19 @@ do_mptcp_sockopt_tests()
 	fi
 }
 
+do_mptcp_sockopt_tests() {
+	#do_mptcp_sockopt_test
+
+	# Strip MPTCP options
+	ip netns exec "$nssbox" iptables -t mangle -A INPUT -p tcp --tcp-flags SYN,ACK SYN -j TCPOPTSTRIP --strip-options 30
+	ip netns exec "$nssbox" ip6tables -t mangle -A INPUT -p tcp --tcp-flags SYN,ACK SYN -j TCPOPTSTRIP --strip-options 30
+
+	do_mptcp_sockopt_test -f "(fallback to TCP)"
+
+	ip netns exec "$nssbox" iptables -t mangle -F
+	ip netns exec "$nssbox" ip6tables -t mangle -F
+}
+
 run_tests()
 {
 	listener_ns="$1"

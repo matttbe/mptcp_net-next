@@ -50,6 +50,8 @@ enum {
 	MPTCP_CMSG_INQ = BIT(1),
 };
 
+static struct proto mptcp_fallback_prot;
+static struct proto mptcp_fallback_v6_prot;
 static struct percpu_counter mptcp_sockets_allocated ____cacheline_aligned_in_smp;
 
 static void __mptcp_destroy_sock(struct sock *sk);
@@ -89,10 +91,12 @@ static bool mptcp_is_tcpsk(struct sock *sk)
 		 * bypass mptcp.
 		 */
 		sock->ops = &inet_stream_ops;
+		sk->sk_prot = &mptcp_fallback_prot;
 		return true;
 #if IS_ENABLED(CONFIG_MPTCP_IPV6)
 	} else if (unlikely(sk->sk_prot == &tcpv6_prot)) {
 		sock->ops = &inet6_stream_ops;
+		sk->sk_prot = &mptcp_fallback_v6_prot;
 		return true;
 #endif
 	}
@@ -3873,6 +3877,9 @@ void __init mptcp_proto_init(void)
 
 	mptcp_prot.h.hashinfo = tcp_prot.h.hashinfo;
 
+	mptcp_fallback_prot = tcp_prot;
+	mptcp_fallback_prot.getsockopt = mptcp_getsockopt;
+
 	if (percpu_counter_init(&mptcp_sockets_allocated, 0, GFP_KERNEL))
 		panic("Failed to allocate MPTCP pcpu counter\n");
 
@@ -3948,6 +3955,9 @@ int __init mptcp_proto_v6_init(void)
 	mptcp_v6_prot.slab = NULL;
 	mptcp_v6_prot.destroy = mptcp_v6_destroy;
 	mptcp_v6_prot.obj_size = sizeof(struct mptcp6_sock);
+
+	mptcp_fallback_prot = tcpv6_prot;
+	mptcp_fallback_v6_prot.getsockopt = mptcp_getsockopt;
 
 	err = proto_register(&mptcp_v6_prot, MPTCP_USE_SLAB);
 	if (err)

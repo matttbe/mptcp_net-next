@@ -27,6 +27,7 @@
 #include <linux/tcp.h>
 
 static int pf = AF_INET;
+static bool fallback = false;
 
 #ifndef IPPROTO_MPTCP
 #define IPPROTO_MPTCP 262
@@ -214,13 +215,16 @@ static void parse_opts(int argc, char **argv)
 {
 	int c;
 
-	while ((c = getopt(argc, argv, "h6")) != -1) {
+	while ((c = getopt(argc, argv, "h6f")) != -1) {
 		switch (c) {
 		case 'h':
 			die_usage(0);
 			break;
 		case '6':
 			pf = AF_INET6;
+			break;
+		case 'f':
+			fallback = true;
 			break;
 		default:
 			die_usage(1);
@@ -314,6 +318,7 @@ static void do_getsockopt_mptcp_info(struct so_state *s, int fd, size_t w)
 
 	olen = sizeof(i);
 	ret = getsockopt(fd, SOL_MPTCP, MPTCP_INFO, &i, &olen);
+	printf("getsockopt MPTCP_INFO: %d, %d\n", getpid(), getppid());
 
 	if (ret < 0)
 		die_perror("getsockopt MPTCP_INFO");
@@ -573,6 +578,8 @@ static int server(int pipefd)
 {
 	int fd = -1, r;
 
+	printf("Server: %d\n", getpid());
+
 	switch (pf) {
 	case AF_INET:
 		fd = sock_listen_mptcp("127.0.0.1", "15432");
@@ -637,6 +644,8 @@ static void test_ip_tos_sockopt(int fd)
 static int client(int pipefd)
 {
 	int fd = -1;
+
+	printf("Client: %d\n", getpid());
 
 	alarm(15);
 
