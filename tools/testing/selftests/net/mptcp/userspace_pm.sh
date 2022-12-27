@@ -811,6 +811,12 @@ test_subflows_v4_v6_mix()
 	ip netns exec "$ns1" ./pm_nl_ctl rem id $server_addr_id token\
 	   "$server6_token" > /dev/null 2>&1
 	sleep 0.5
+
+	:>"$client_evts"
+	ip netns exec "$ns2" ./pm_nl_ctl csf lip dead:beef:2::2 lid 23 rip\
+	   dead:beef:2::1 rport $app4_port token "$client4_token"
+	sleep 0.5
+	cat "$client_evts"
 }
 
 test_prio()
