@@ -919,11 +919,11 @@ test_listener()
 
 make_connection
 make_connection "v6"
-test_announce
-test_remove
-test_subflows
+#test_announce
+#test_remove
+#test_subflows
 test_subflows_v4_v6_mix
-test_prio
-test_listener
+#test_prio
+#test_listener
 
 exit 0
