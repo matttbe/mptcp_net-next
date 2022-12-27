@@ -527,6 +527,8 @@ verify_subflow_events()
 		return 0
 	fi
 	stdbuf -o0 -e0 printf "[FAIL]\n"
+	cat "$evt"
+	echo "$@"
 	exit 1
 }
 
