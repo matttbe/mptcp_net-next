@@ -74,6 +74,12 @@ cleanup()
 	if [ $client_evts_pid -ne 0 ]; then
 		kill_wait $client_evts_pid
 	fi
+	if [ $tcpdump_ns1 -ne 0 ]; then
+		kill_wait $tcpdump_ns1
+	fi
+	if [ $tcpdump_ns2 -ne 0 ]; then
+		kill_wait $tcpdump_ns2
+	fi
 	local netns
 	for netns in "$ns1" "$ns2" ;do
 		ip netns del "$netns"
@@ -108,6 +114,11 @@ ip -net "$ns2" addr add dead:beef:1::2/64 dev ns2eth1 nodad
 ip -net "$ns2" addr add dead:beef:2::2/64 dev ns2eth1 nodad
 ip -net "$ns2" link set ns2eth1 up
 
+ip netns exec "$ns1" tcpdump -s 65535 -B 32768 -i ns1eth2 -w $(dirname ${0})/ns1.pcap &
+tcpdump_ns1=$!
+ip netns exec "$ns2" tcpdump -s 65535 -B 32768 -i ns2eth1 -w $(dirname ${0})/ns2.pcap &
+tcpdump_ns2=$!
+sleep 1
 stdbuf -o0 -e0 printf "Created network namespaces ns1, ns2         \t\t\t[OK]\n"
 
 make_file()
