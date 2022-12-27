@@ -777,7 +777,7 @@ test_subflows_v4_v6_mix()
 	   $app6_port token "$client6_token" > /dev/null 2>&1
 	sleep 0.5
 	verify_subflow_events "$client_evts" "$SUB_ESTABLISHED" "$client6_token"\
-			      "$AF_INET" "10.0.2.2" "10.0.2.1" "$app6_port" "23"\
+			      "$AF_INET6" "::ffff:10.0.2.2" "::ffff:10.0.2.1" "$app6_port" "23"\
 			      "$server_addr_id" "ns2" "ns1"
 
 	# Delete the listener from the server ns, if one was created
@@ -787,11 +787,11 @@ test_subflows_v4_v6_mix()
 
 	# DESTROY_SUBFLOW from client to server machine
 	:>"$client_evts"
-	ip netns exec "$ns2" ./pm_nl_ctl dsf lip 10.0.2.2 lport "$sport" rip 10.0.2.1 rport\
+	ip netns exec "$ns2" ./pm_nl_ctl dsf lip ::ffff:10.0.2.2 lport "$sport" rip ::ffff:10.0.2.1 rport\
 	   $app6_port token "$client6_token" > /dev/null 2>&1
 	sleep 0.5
 	verify_subflow_events "$client_evts" "$SUB_CLOSED" "$client6_token" \
-			      "$AF_INET" "10.0.2.2" "10.0.2.1" "$app6_port" "23"\
+			      "$AF_INET6" "::ffff:10.0.2.2" "::ffff:10.0.2.1" "$app6_port" "23"\
 			      "$server_addr_id" "ns2" "ns1"
 
 	# RM_ADDR from server to client machine
