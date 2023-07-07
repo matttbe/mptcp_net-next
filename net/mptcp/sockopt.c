@@ -55,336 +55,6 @@ static void sockopt_seq_inc(struct mptcp_sock *msk)
 	msk->setsockopt_seq = sockopt_seq_reset((struct sock *)msk) + seq;
 }
 
-static int mptcp_get_int_option(struct mptcp_sock *msk, sockptr_t optval,
-				unsigned int optlen, int *val)
-{
-	if (optlen < sizeof(int))
-		return -EINVAL;
-
-	if (copy_from_sockptr(val, optval, sizeof(*val)))
-		return -EFAULT;
-
-	return 0;
-}
-
-static void mptcp_sol_socket_sync_intval(struct mptcp_sock *msk, int optname, int val)
-{
-	struct mptcp_subflow_context *subflow;
-	struct sock *sk = (struct sock *)msk;
-
-	lock_sock(sk);
-	sockopt_seq_inc(msk);
-
-	mptcp_for_each_subflow(msk, subflow) {
-		struct sock *ssk = mptcp_subflow_tcp_sock(subflow);
-		bool slow = lock_sock_fast(ssk);
-
-		switch (optname) {
-		case SO_DEBUG:
-			sock_valbool_flag(ssk, SOCK_DBG, !!val);
-			break;
-		case SO_KEEPALIVE:
-			if (ssk->sk_prot->keepalive)
-				ssk->sk_prot->keepalive(ssk, !!val);
-			sock_valbool_flag(ssk, SOCK_KEEPOPEN, !!val);
-			break;
-		case SO_PRIORITY:
-			ssk->sk_priority = val;
-			break;
-		case SO_SNDBUF:
-		case SO_SNDBUFFORCE:
-			ssk->sk_userlocks |= SOCK_SNDBUF_LOCK;
-			WRITE_ONCE(ssk->sk_sndbuf, sk->sk_sndbuf);
-			break;
-		case SO_RCVBUF:
-		case SO_RCVBUFFORCE:
-			ssk->sk_userlocks |= SOCK_RCVBUF_LOCK;
-			WRITE_ONCE(ssk->sk_rcvbuf, sk->sk_rcvbuf);
-			break;
-		case SO_MARK:
-			if (READ_ONCE(ssk->sk_mark) != sk->sk_mark) {
-				ssk->sk_mark = sk->sk_mark;
-				sk_dst_reset(ssk);
-			}
-			break;
-		case SO_INCOMING_CPU:
-			WRITE_ONCE(ssk->sk_incoming_cpu, val);
-			break;
-		}
-
-		subflow->setsockopt_seq = msk->setsockopt_seq;
-		unlock_sock_fast(ssk, slow);
-	}
-
-	release_sock(sk);
-}
-
-static int mptcp_sol_socket_intval(struct mptcp_sock *msk, int optname, int val)
-{
-	sockptr_t optval = KERNEL_SOCKPTR(&val);
-	struct sock *sk = (struct sock *)msk;
-	int ret;
-
-	ret = sock_setsockopt(sk->sk_socket, SOL_SOCKET, optname,
-			      optval, sizeof(val));
-	if (ret)
-		return ret;
-
-	mptcp_sol_socket_sync_intval(msk, optname, val);
-	return 0;
-}
-
-static void mptcp_so_incoming_cpu(struct mptcp_sock *msk, int val)
-{
-	struct sock *sk = (struct sock *)msk;
-
-	WRITE_ONCE(sk->sk_incoming_cpu, val);
-
-	mptcp_sol_socket_sync_intval(msk, SO_INCOMING_CPU, val);
-}
-
-static int mptcp_setsockopt_sol_socket_tstamp(struct mptcp_sock *msk, int optname, int val)
-{
-	sockptr_t optval = KERNEL_SOCKPTR(&val);
-	struct mptcp_subflow_context *subflow;
-	struct sock *sk = (struct sock *)msk;
-	int ret;
-
-	ret = sock_setsockopt(sk->sk_socket, SOL_SOCKET, optname,
-			      optval, sizeof(val));
-	if (ret)
-		return ret;
-
-	lock_sock(sk);
-	mptcp_for_each_subflow(msk, subflow) {
-		struct sock *ssk = mptcp_subflow_tcp_sock(subflow);
-		bool slow = lock_sock_fast(ssk);
-
-		sock_set_timestamp(sk, optname, !!val);
-		unlock_sock_fast(ssk, slow);
-	}
-
-	release_sock(sk);
-	return 0;
-}
-
-static int mptcp_setsockopt_sol_socket_int(struct mptcp_sock *msk, int optname,
-					   sockptr_t optval,
-					   unsigned int optlen)
-{
-	int val, ret;
-
-	ret = mptcp_get_int_option(msk, optval, optlen, &val);
-	if (ret)
-		return ret;
-
-	switch (optname) {
-	case SO_KEEPALIVE:
-		mptcp_sol_socket_sync_intval(msk, optname, val);
-		return 0;
-	case SO_DEBUG:
-	case SO_MARK:
-	case SO_PRIORITY:
-	case SO_SNDBUF:
-	case SO_SNDBUFFORCE:
-	case SO_RCVBUF:
-	case SO_RCVBUFFORCE:
-		return mptcp_sol_socket_intval(msk, optname, val);
-	case SO_INCOMING_CPU:
-		mptcp_so_incoming_cpu(msk, val);
-		return 0;
-	case SO_TIMESTAMP_OLD:
-	case SO_TIMESTAMP_NEW:
-	case SO_TIMESTAMPNS_OLD:
-	case SO_TIMESTAMPNS_NEW:
-		return mptcp_setsockopt_sol_socket_tstamp(msk, optname, val);
-	}
-
-	return -ENOPROTOOPT;
-}
-
-static int mptcp_setsockopt_sol_socket_timestamping(struct mptcp_sock *msk,
-						    int optname,
-						    sockptr_t optval,
-						    unsigned int optlen)
-{
-	struct mptcp_subflow_context *subflow;
-	struct sock *sk = (struct sock *)msk;
-	struct so_timestamping timestamping;
-	int ret;
-
-	if (optlen == sizeof(timestamping)) {
-		if (copy_from_sockptr(&timestamping, optval,
-				      sizeof(timestamping)))
-			return -EFAULT;
-	} else if (optlen == sizeof(int)) {
-		memset(&timestamping, 0, sizeof(timestamping));
-
-		if (copy_from_sockptr(&timestamping.flags, optval, sizeof(int)))
-			return -EFAULT;
-	} else {
-		return -EINVAL;
-	}
-
-	ret = sock_setsockopt(sk->sk_socket, SOL_SOCKET, optname,
-			      KERNEL_SOCKPTR(&timestamping),
-			      sizeof(timestamping));
-	if (ret)
-		return ret;
-
-	lock_sock(sk);
-
-	mptcp_for_each_subflow(msk, subflow) {
-		struct sock *ssk = mptcp_subflow_tcp_sock(subflow);
-		bool slow = lock_sock_fast(ssk);
-
-		sock_set_timestamping(sk, optname, timestamping);
-		unlock_sock_fast(ssk, slow);
-	}
-
-	release_sock(sk);
-
-	return 0;
-}
-
-static int mptcp_setsockopt_sol_socket_linger(struct mptcp_sock *msk, sockptr_t optval,
-					      unsigned int optlen)
-{
-	struct mptcp_subflow_context *subflow;
-	struct sock *sk = (struct sock *)msk;
-	struct linger ling;
-	sockptr_t kopt;
-	int ret;
-
-	if (optlen < sizeof(ling))
-		return -EINVAL;
-
-	if (copy_from_sockptr(&ling, optval, sizeof(ling)))
-		return -EFAULT;
-
-	kopt = KERNEL_SOCKPTR(&ling);
-	ret = sock_setsockopt(sk->sk_socket, SOL_SOCKET, SO_LINGER, kopt, sizeof(ling));
-	if (ret)
-		return ret;
-
-	lock_sock(sk);
-	sockopt_seq_inc(msk);
-	mptcp_for_each_subflow(msk, subflow) {
-		struct sock *ssk = mptcp_subflow_tcp_sock(subflow);
-		bool slow = lock_sock_fast(ssk);
-
-		if (!ling.l_onoff) {
-			sock_reset_flag(ssk, SOCK_LINGER);
-		} else {
-			ssk->sk_lingertime = sk->sk_lingertime;
-			sock_set_flag(ssk, SOCK_LINGER);
-		}
-
-		subflow->setsockopt_seq = msk->setsockopt_seq;
-		unlock_sock_fast(ssk, slow);
-	}
-
-	release_sock(sk);
-	return 0;
-}
-
-static int mptcp_setsockopt_sol_socket(struct mptcp_sock *msk, int optname,
-				       sockptr_t optval, unsigned int optlen)
-{
-	struct sock *sk = (struct sock *)msk;
-	struct socket *ssock;
-	int ret;
-
-	switch (optname) {
-	case SO_REUSEPORT:
-	case SO_REUSEADDR:
-	case SO_BINDTODEVICE:
-	case SO_BINDTOIFINDEX:
-		lock_sock(sk);
-		ssock = __mptcp_nmpc_socket(msk);
-		if (IS_ERR(ssock)) {
-			release_sock(sk);
-			return PTR_ERR(ssock);
-		}
-
-		ret = sock_setsockopt(ssock, SOL_SOCKET, optname, optval, optlen);
-		if (ret == 0) {
-			if (optname == SO_REUSEPORT)
-				sk->sk_reuseport = ssock->sk->sk_reuseport;
-			else if (optname == SO_REUSEADDR)
-				sk->sk_reuse = ssock->sk->sk_reuse;
-			else if (optname == SO_BINDTODEVICE)
-				sk->sk_bound_dev_if = ssock->sk->sk_bound_dev_if;
-			else if (optname == SO_BINDTOIFINDEX)
-				sk->sk_bound_dev_if = ssock->sk->sk_bound_dev_if;
-		}
-		release_sock(sk);
-		return ret;
-	case SO_KEEPALIVE:
-	case SO_PRIORITY:
-	case SO_SNDBUF:
-	case SO_SNDBUFFORCE:
-	case SO_RCVBUF:
-	case SO_RCVBUFFORCE:
-	case SO_MARK:
-	case SO_INCOMING_CPU:
-	case SO_DEBUG:
-	case SO_TIMESTAMP_OLD:
-	case SO_TIMESTAMP_NEW:
-	case SO_TIMESTAMPNS_OLD:
-	case SO_TIMESTAMPNS_NEW:
-		return mptcp_setsockopt_sol_socket_int(msk, optname, optval,
-						       optlen);
-	case SO_TIMESTAMPING_OLD:
-	case SO_TIMESTAMPING_NEW:
-		return mptcp_setsockopt_sol_socket_timestamping(msk, optname,
-								optval, optlen);
-	case SO_LINGER:
-		return mptcp_setsockopt_sol_socket_linger(msk, optval, optlen);
-	case SO_RCVLOWAT:
-	case SO_RCVTIMEO_OLD:
-	case SO_RCVTIMEO_NEW:
-	case SO_SNDTIMEO_OLD:
-	case SO_SNDTIMEO_NEW:
-	case SO_BUSY_POLL:
-	case SO_PREFER_BUSY_POLL:
-	case SO_BUSY_POLL_BUDGET:
-		/* No need to copy: only relevant for msk */
-		return sock_setsockopt(sk->sk_socket, SOL_SOCKET, optname, optval, optlen);
-	case SO_NO_CHECK:
-	case SO_DONTROUTE:
-	case SO_BROADCAST:
-	case SO_BSDCOMPAT:
-	case SO_PASSCRED:
-	case SO_PASSPIDFD:
-	case SO_PASSSEC:
-	case SO_RXQ_OVFL:
-	case SO_WIFI_STATUS:
-	case SO_NOFCS:
-	case SO_SELECT_ERR_QUEUE:
-		return 0;
-	}
-
-	/* SO_OOBINLINE is not supported, let's avoid the related mess
-	 * SO_ATTACH_FILTER, SO_ATTACH_BPF, SO_ATTACH_REUSEPORT_CBPF,
-	 * SO_DETACH_REUSEPORT_BPF, SO_DETACH_FILTER, SO_LOCK_FILTER,
-	 * we must be careful with subflows
-	 *
-	 * SO_ATTACH_REUSEPORT_EBPF is not supported, at it checks
-	 * explicitly the sk_protocol field
-	 *
-	 * SO_PEEK_OFF is unsupported, as it is for plain TCP
-	 * SO_MAX_PACING_RATE is unsupported, we must be careful with subflows
-	 * SO_CNX_ADVICE is currently unsupported, could possibly be relevant,
-	 * but likely needs careful design
-	 *
-	 * SO_ZEROCOPY is currently unsupported, TODO in sndmsg
-	 * SO_TXTIME is currently unsupported
-	 */
-
-	return -EOPNOTSUPP;
-}
-
 static bool mptcp_supported_sockopt(int level, int optname)
 {
 	if (level == SOL_IP) {
@@ -530,7 +200,22 @@ static bool mptcp_supported_sockopt(int level, int optname)
 		 * TCP_REPAIR_WINDOW are not supported, better avoid this mess
 		 */
 	}
+	if (level == SOL_SOCKET)
+		return true;
+
 	return false;
+}
+
+static int mptcp_get_int_option(struct mptcp_sock *msk, sockptr_t optval,
+				unsigned int optlen, int *val)
+{
+	if (optlen < sizeof(int))
+		return -EINVAL;
+
+	if (copy_from_sockptr(val, optval, sizeof(*val)))
+		return -EFAULT;
+
+	return 0;
 }
 
 static int mptcp_setsockopt_sol_tcp_inq(struct mptcp_sock *msk, sockptr_t optval,
@@ -661,6 +346,9 @@ static int mptcp_setsockopt_msk(struct mptcp_sock *msk, int level, int optname,
 	struct sock *sk = (struct sock *)msk;
 
 	/* We cannot use tcp_setsockopt() with the msk */
+	if (level == SOL_SOCKET)
+		return sock_setsockopt(sk->sk_socket, level, optname, optval, optlen);
+
 	if (level == SOL_IP)
 		return ip_setsockopt(sk, level, optname, optval, optlen);
 
@@ -691,7 +379,10 @@ static int mptcp_setsockopt_all_sf(struct mptcp_sock *msk, int level,
 	mptcp_for_each_subflow(msk, subflow) {
 		struct sock *ssk = mptcp_subflow_tcp_sock(subflow);
 
-		tcp_setsockopt(ssk, level, optname, optval, optlen);
+		if (level == SOL_SOCKET)
+			sock_setsockopt(ssk->sk_socket, level, optname, optval, optlen);
+		else
+			tcp_setsockopt(ssk, level, optname, optval, optlen);
 	}
 	release_sock(sk);
 
@@ -710,7 +401,11 @@ static int mptcp_setsockopt_first_sf_only(struct mptcp_sock *msk, int level, int
 	lock_sock(sk);
 	ssk = msk->first;
 	if (ssk) {
-		ret = tcp_setsockopt(ssk, level, optname, optval, optlen);
+		if (level == SOL_SOCKET)
+			ret = sock_setsockopt(ssk->sk_socket, level, optname,
+					      optval, optlen);
+		else
+			ret = tcp_setsockopt(ssk, level, optname, optval, optlen);
 		goto unlock;
 	}
 
@@ -720,11 +415,95 @@ static int mptcp_setsockopt_first_sf_only(struct mptcp_sock *msk, int level, int
 		goto unlock;
 	}
 
-	ret = tcp_setsockopt(sock->sk, level, optname, optval, optlen);
+	if (level == SOL_SOCKET)
+		ret = sock_setsockopt(sock, level, optname, optval, optlen);
+	else
+		ret = tcp_setsockopt(sock->sk, level, optname, optval, optlen);
 
 unlock:
 	release_sock(sk);
 	return ret;
+}
+
+static int mptcp_setsockopt_msk_and_first_sf(struct mptcp_sock *msk, int level,
+					     int optname, sockptr_t optval,
+					     unsigned int optlen)
+{
+	int err = mptcp_setsockopt_msk(msk, level, optname, optval, optlen);
+
+	if (err != 0)
+		return err;
+
+	return mptcp_setsockopt_first_sf_only(msk, level, optname, optval, optlen);
+}
+
+static int mptcp_setsockopt_sol_socket(struct mptcp_sock *msk, int optname,
+				       sockptr_t optval, unsigned int optlen)
+{
+	switch (optname) {
+	case SO_REUSEPORT:
+	case SO_REUSEADDR:
+	case SO_BINDTODEVICE:
+	case SO_BINDTOIFINDEX:
+		return mptcp_setsockopt_msk_and_first_sf(msk, SOL_SOCKET, optname,
+							 optval, optlen);
+	case SO_KEEPALIVE:
+	case SO_PRIORITY:
+	case SO_SNDBUF:
+	case SO_SNDBUFFORCE:
+	case SO_RCVBUF:
+	case SO_RCVBUFFORCE:
+	case SO_MARK:
+	case SO_INCOMING_CPU:
+	case SO_DEBUG:
+	case SO_TIMESTAMP_OLD:
+	case SO_TIMESTAMP_NEW:
+	case SO_TIMESTAMPNS_OLD:
+	case SO_TIMESTAMPNS_NEW:
+	case SO_TIMESTAMPING_OLD:
+	case SO_TIMESTAMPING_NEW:
+		return mptcp_setsockopt_all_sf(msk, SOL_SOCKET, optname, optval, optlen);
+	case SO_RCVLOWAT:
+	case SO_RCVTIMEO_OLD:
+	case SO_RCVTIMEO_NEW:
+	case SO_SNDTIMEO_OLD:
+	case SO_SNDTIMEO_NEW:
+	case SO_BUSY_POLL:
+	case SO_PREFER_BUSY_POLL:
+	case SO_BUSY_POLL_BUDGET:
+		return mptcp_setsockopt_msk(msk, SOL_SOCKET, optname, optval, optlen);
+	case SO_NO_CHECK:
+	case SO_DONTROUTE:
+	case SO_BROADCAST:
+	case SO_BSDCOMPAT:
+	case SO_PASSCRED:
+	case SO_PASSPIDFD:
+	case SO_PASSSEC:
+	case SO_RXQ_OVFL:
+	case SO_WIFI_STATUS:
+	case SO_NOFCS:
+	case SO_SELECT_ERR_QUEUE:
+		return 0;
+	}
+
+	/* SO_OOBINLINE is not supported, let's avoid the related mess
+	 * SO_ATTACH_FILTER, SO_ATTACH_BPF, SO_ATTACH_REUSEPORT_CBPF,
+	 * SO_DETACH_REUSEPORT_BPF, SO_DETACH_FILTER, SO_LOCK_FILTER,
+	 * we must be careful with subflows
+	 *
+	 * SO_ATTACH_REUSEPORT_EBPF is not supported, at it checks
+	 * explicitly the sk_protocol field
+	 *
+	 * SO_PEEK_OFF is unsupported, as it is for plain TCP
+	 * SO_MAX_PACING_RATE is unsupported, we must be careful with subflows
+	 * SO_CNX_ADVICE is currently unsupported, could possibly be relevant,
+	 * but likely needs careful design
+	 *
+	 * SO_ZEROCOPY is currently unsupported, TODO in sndmsg
+	 * SO_TXTIME is currently unsupported
+	 */
+
+	return -EOPNOTSUPP;
 }
 
 static int mptcp_setsockopt_v4(struct mptcp_sock *msk, int optname,
@@ -792,9 +571,6 @@ int mptcp_setsockopt(struct sock *sk, int level, int optname,
 
 	pr_debug("msk=%p", msk);
 
-	if (level == SOL_SOCKET)
-		return mptcp_setsockopt_sol_socket(msk, optname, optval, optlen);
-
 	if (!mptcp_supported_sockopt(level, optname))
 		return -ENOPROTOOPT;
 
@@ -807,8 +583,15 @@ int mptcp_setsockopt(struct sock *sk, int level, int optname,
 	lock_sock(sk);
 	ssk = __mptcp_tcp_fallback(msk);
 	release_sock(sk);
-	if (ssk)
+	if (ssk) {
+		if (level == SOL_SOCKET)
+			return sock_setsockopt(ssk->sk_socket, level, optname,
+					       optval, optlen);
 		return tcp_setsockopt(ssk, level, optname, optval, optlen);
+	}
+
+	if (level == SOL_SOCKET)
+		return mptcp_setsockopt_sol_socket(msk, optname, optval, optlen);
 
 	if (level == SOL_IP)
 		return mptcp_setsockopt_v4(msk, optname, optval, optlen);
