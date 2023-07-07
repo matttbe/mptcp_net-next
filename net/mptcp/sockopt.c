@@ -1317,6 +1317,56 @@ static int mptcp_getsockopt_sol_tcp(struct mptcp_sock *msk, int optname,
 	return -EOPNOTSUPP;
 }
 
+static int mptcp_getsockopt_sol_socket(struct mptcp_sock *msk, int optname,
+				       char __user *optval, int __user *optlen)
+{
+	switch (optname) {
+	case SO_REUSEPORT:
+	case SO_REUSEADDR:
+	case SO_BINDTODEVICE:
+	case SO_BINDTOIFINDEX:
+	case SO_KEEPALIVE:
+	case SO_PRIORITY:
+	case SO_SNDBUF:
+	case SO_SNDBUFFORCE:
+	case SO_RCVBUF:
+	case SO_RCVBUFFORCE:
+	case SO_MARK:
+	case SO_INCOMING_CPU:
+	case SO_DEBUG:
+	case SO_TIMESTAMP_OLD:
+	case SO_TIMESTAMP_NEW:
+	case SO_TIMESTAMPNS_OLD:
+	case SO_TIMESTAMPNS_NEW:
+	case SO_TIMESTAMPING_OLD:
+	case SO_TIMESTAMPING_NEW:
+	case SO_RCVLOWAT:
+	case SO_RCVTIMEO_OLD:
+	case SO_RCVTIMEO_NEW:
+	case SO_SNDTIMEO_OLD:
+	case SO_SNDTIMEO_NEW:
+	case SO_BUSY_POLL:
+	case SO_PREFER_BUSY_POLL:
+	case SO_BUSY_POLL_BUDGET:
+		return mptcp_getsockopt_first_sf_only(msk, SOL_SOCKET, optname,
+						      optval, optlen);
+	case SO_NO_CHECK:
+	case SO_DONTROUTE:
+	case SO_BROADCAST:
+	case SO_BSDCOMPAT:
+	case SO_PASSCRED:
+	case SO_PASSPIDFD:
+	case SO_PASSSEC:
+	case SO_RXQ_OVFL:
+	case SO_WIFI_STATUS:
+	case SO_NOFCS:
+	case SO_SELECT_ERR_QUEUE:
+		return 0;
+	}
+
+	return -EOPNOTSUPP;
+}
+
 static int mptcp_getsockopt_v4(struct mptcp_sock *msk, int optname,
 			       char __user *optval, int __user *optlen)
 {
@@ -1379,9 +1429,15 @@ int mptcp_getsockopt(struct sock *sk, int level, int optname,
 	lock_sock(sk);
 	ssk = __mptcp_tcp_fallback(msk);
 	release_sock(sk);
-	if (ssk)
+	if (ssk) {
+		if (level == SOL_SOCKET)
+			return sock_getsockopt(ssk->sk_socket, level, optname,
+					       optval, option);
 		return tcp_getsockopt(ssk, level, optname, optval, option);
+	}
 
+	if (level == SOL_SOCKET)
+		return mptcp_getsockopt_sol_socket(msk, optname, optval, option);
 	if (level == SOL_IP)
 		return mptcp_getsockopt_v4(msk, optname, optval, option);
 	if (level == SOL_IPV6)
