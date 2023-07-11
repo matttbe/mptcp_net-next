@@ -1073,7 +1073,7 @@ static void mptcp_get_sub_addrs(const struct sock *sk, struct mptcp_subflow_addr
 		a->sin_remote.sin_family = AF_INET;
 		a->sin_remote.sin_port = inet->inet_dport;
 		a->sin_remote.sin_addr.s_addr = inet->inet_daddr;
-#if IS_ENABLED(CONFIG_IPV6)
+#if IS_ENABLED(CONFIG_MPTCP_IPV6)
 	} else if (sk->sk_family == AF_INET6) {
 		const struct ipv6_pinfo *np = inet6_sk(sk);
 
