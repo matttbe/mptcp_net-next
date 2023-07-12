@@ -729,12 +729,24 @@ unlock:
 	return ret;
 }
 
+static int mptcp_setsockopt_msk_first(struct mptcp_sock *msk, int level,
+				   int optname, sockptr_t optval,
+				   unsigned int optlen)
+{
+	int err = mptcp_setsockopt_msk(msk, level, optname, optval, optlen);
+
+	if (err != 0)
+		return err;
+
+	return mptcp_setsockopt_first_sf_only(msk, level, optname, optval, optlen);
+}
 static int mptcp_setsockopt_v4(struct mptcp_sock *msk, int optname,
 			       sockptr_t optval, unsigned int optlen)
 {
 	switch (optname) {
 	case IP_FREEBIND:
 	case IP_TRANSPARENT:
+		return mptcp_setsockopt_msk_first(msk, SOL_IP, optname, optval, optlen);
 	case IP_TOS:
 	case IP_TTL:
 		return mptcp_setsockopt_all_sf(msk, SOL_IP, optname, optval, optlen);
@@ -747,9 +759,10 @@ static int mptcp_setsockopt_v6(struct mptcp_sock *msk, int optname,
 			       sockptr_t optval, unsigned int optlen)
 {
 	switch (optname) {
-	case IPV6_V6ONLY:
 	case IPV6_TRANSPARENT:
 	case IPV6_FREEBIND:
+		return mptcp_setsockopt_msk_first(msk, SOL_IPV6, optname, optval, optlen);
+	case IPV6_V6ONLY:
 	case IPV6_UNICAST_HOPS:
 		return mptcp_setsockopt_all_sf(msk, SOL_IPV6, optname, optval, optlen);
 	}
