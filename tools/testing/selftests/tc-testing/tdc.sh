@@ -5,3 +5,5 @@ modprobe netdevsim
 modprobe sch_teql
 ./tdc.py -c actions --nobuildebpf
 ./tdc.py -c qdisc
+./tdc.py -c filter
+./tdc.py -c infra
