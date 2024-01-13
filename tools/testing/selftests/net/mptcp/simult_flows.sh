@@ -197,9 +197,9 @@ do_transfer()
 	echo " [ fail ]"
 	echo "client exit code $retc, server $rets" 1>&2
 	echo -e "\nnetns ${ns3} socket stat for $port:" 1>&2
-	ip netns exec ${ns3} ss -nita 1>&2 -o "sport = :$port"
+	ip netns exec ${ns3} ss -nipta 1>&2 -o "sport = :$port"
 	echo -e "\nnetns ${ns1} socket stat for $port:" 1>&2
-	ip netns exec ${ns1} ss -nita 1>&2 -o "dport = :$port"
+	ip netns exec ${ns1} ss -nipta 1>&2 -o "dport = :$port"
 	ls -l $sin $cout
 	ls -l $cin $sout
 

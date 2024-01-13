@@ -1139,10 +1139,10 @@ do_transfer()
 	if [ ${rets} -ne 0 ] || [ ${retc} -ne 0 ]; then
 		fail_test "client exit code $retc, server $rets"
 		echo -e "\nnetns ${listener_ns} socket stat for ${port}:" 1>&2
-		ip netns exec ${listener_ns} ss -Menita 1>&2 -o "sport = :$port"
+		ip netns exec ${listener_ns} ss -Menipta 1>&2 -o "sport = :$port"
 		cat /tmp/${listener_ns}.out
 		echo -e "\nnetns ${connector_ns} socket stat for ${port}:" 1>&2
-		ip netns exec ${connector_ns} ss -Menita 1>&2 -o "dport = :$port"
+		ip netns exec ${connector_ns} ss -Menipta 1>&2 -o "dport = :$port"
 		cat /tmp/${connector_ns}.out
 
 		cat "$capout"
@@ -1818,8 +1818,8 @@ chk_subflow_nr()
 
 	print_check "${msg}"
 
-	cnt1=$(ss -N $ns1 -tOni | grep -c token)
-	cnt2=$(ss -N $ns2 -tOni | grep -c token)
+	cnt1=$(ss -N $ns1 -tOnip | grep -c token)
+	cnt2=$(ss -N $ns2 -tOnip | grep -c token)
 	if [ "$cnt1" != "$subflow_nr" ] || [ "$cnt2" != "$subflow_nr" ]; then
 		fail_test "got $cnt1:$cnt2 subflows expected $subflow_nr"
 		dump_stats=1
@@ -1828,8 +1828,8 @@ chk_subflow_nr()
 	fi
 
 	if [ "${dump_stats}" = 1 ]; then
-		ss -N $ns1 -tOni
-		ss -N $ns1 -tOni | grep token
+		ss -N $ns1 -tOnip
+		ss -N $ns1 -tOnip | grep token
 		ip -n $ns1 mptcp endpoint
 	fi
 }
@@ -1846,8 +1846,8 @@ chk_mptcp_info()
 
 	print_check "mptcp_info ${info1:0:15}=$exp1:$exp2"
 
-	cnt1=$(ss -N $ns1 -inmHM | mptcp_lib_get_info_value "$info1" "$info1")
-	cnt2=$(ss -N $ns2 -inmHM | mptcp_lib_get_info_value "$info2" "$info2")
+	cnt1=$(ss -N $ns1 -ipnmHM | mptcp_lib_get_info_value "$info1" "$info1")
+	cnt2=$(ss -N $ns2 -ipnmHM | mptcp_lib_get_info_value "$info2" "$info2")
 	# 'ss' only display active connections and counters that are not 0.
 	[ -z "$cnt1" ] && cnt1=0
 	[ -z "$cnt2" ] && cnt2=0
@@ -1860,8 +1860,8 @@ chk_mptcp_info()
 	fi
 
 	if [ "$dump_stats" = 1 ]; then
-		ss -N $ns1 -inmHM
-		ss -N $ns2 -inmHM
+		ss -N $ns1 -ipnmHM
+		ss -N $ns2 -ipnmHM
 	fi
 }
 
@@ -1875,7 +1875,7 @@ chk_subflows_total()
 	local dump_stats
 
 	# if subflows_total counter is supported, use it:
-	if [ -n "$(ss -N $ns1 -inmHM | mptcp_lib_get_info_value $info $info)" ]; then
+	if [ -n "$(ss -N $ns1 -ipnmHM | mptcp_lib_get_info_value $info $info)" ]; then
 		chk_mptcp_info $info $1 $info $2
 		return
 	fi
@@ -1883,9 +1883,9 @@ chk_subflows_total()
 	print_check "$info $1:$2"
 
 	# if not, count the TCP connections that are in fact MPTCP subflows
-	cnt1=$(ss -N $ns1 -ti state established state syn-sent state syn-recv |
+	cnt1=$(ss -N $ns1 -tip state established state syn-sent state syn-recv |
 	       grep -c tcp-ulp-mptcp)
-	cnt2=$(ss -N $ns2 -ti state established state syn-sent state syn-recv |
+	cnt2=$(ss -N $ns2 -tip state established state syn-sent state syn-recv |
 	       grep -c tcp-ulp-mptcp)
 
 	if [ "$1" != "$cnt1" ] || [ "$2" != "$cnt2" ]; then
@@ -1896,8 +1896,8 @@ chk_subflows_total()
 	fi
 
 	if [ "$dump_stats" = 1 ]; then
-		ss -N $ns1 -ti
-		ss -N $ns2 -ti
+		ss -N $ns1 -tip
+		ss -N $ns2 -tip
 	fi
 }
 
