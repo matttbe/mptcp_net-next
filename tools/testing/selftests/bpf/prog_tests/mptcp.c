@@ -450,7 +450,7 @@ static int has_bytes_sent(char *addr)
 {
 	char cmd[128];
 
-	snprintf(cmd, sizeof(cmd), "ip netns exec %s ss -itp src %s sport %d dst %s | %s",
+	snprintf(cmd, sizeof(cmd), "ip netns exec %s ss -tipn src %s sport %d dst %s | %s",
 		 NS_TEST, ADDR_1, PORT_1, addr, "grep -q bytes_sent:");
 	return system(cmd);
 }
