@@ -1,19 +1,14 @@
 name: "MPTCP Upstream Build Validation"
 on:
   push:
-    branches-ignore:
-      - 'archived/**'    # previous branches
-      - 't/**'           # TopGit tree
-      - 'net'            # part of the TopGit tree
-      - 'net-next'       # part of the TopGit tree
-      - 'for-review'     # part of the TopGit tree
-      - 'for-review-net' # part of the TopGit tree
     tags:
       - 'patchew/**'     # patchew is using tags
       # ideally, we would take 'export/**' but the cache is per branch...
       # In other words, when using tags, we can only use the cache if we re-tag.
       # https://github.com/actions/cache/issues/556
       # So we build the "export" branch and we try to find the tag later
+    paths-ignore:
+      - '.github/**'     # cannot modify the CI behaviour
 
 env:
   CURL_OPT: "--no-progress-meter --connect-timeout 30 --retry 20 --retry-delay 10"

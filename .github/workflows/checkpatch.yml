@@ -1,15 +1,10 @@
 name: "CheckPatch"
 on:
   push:
-    branches-ignore:
-      - 'archived/**'    # previous branches
-      - 't/**'           # TopGit tree
-      - 'net'            # part of the TopGit tree
-      - 'net-next'       # part of the TopGit tree
-      - 'for-review'     # part of the TopGit tree
-      - 'for-review-net' # part of the TopGit tree
     tags:
       - 'patchew/**'     # patchew is using tags
+    paths-ignore:
+      - '.github/**'     # cannot modify the CI behaviour
 
 env:
   CURL_OPT: "--no-progress-meter --connect-timeout 30 --retry 20 --retry-delay 10"
