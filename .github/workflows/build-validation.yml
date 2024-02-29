@@ -46,6 +46,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0 # we need to fetch all commits between net and net-next, quicker to get everything
+          ref: "${{ github.sha }}" ## only the history from this SHA, not all branches
+          fetch-tags: 'false' ## we don't need the tags
 
       - name: "Find base branch"
         id: branch

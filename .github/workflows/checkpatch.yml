@@ -35,6 +35,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0 ## to make sure a mentioned commit exists
+          ref: "${{ github.sha }}" ## only the history from this SHA, not all branches
+          fetch-tags: 'false' ## we don't need the tags
 
       - name: "Checkpatch"
         uses: multipath-tcp/mptcp-upstream-validate-export-action@main
