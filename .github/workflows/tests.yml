@@ -24,11 +24,15 @@ permissions: {}
 jobs:
   tests:
     name: "Tests"
-    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        mode: ['normal', 'btf']
+        include:
+          - mode: normal
+            runner: ${{ github.repository_owner == 'multipath-tcp' && 'self-hosted' || 'self-hosted' }} # 'ubuntu-latest' }}  ## TODO
+          - mode: btf
+            runner: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read # to fetch code (actions/checkout)
       checks: write  # to write results
@@ -36,6 +40,8 @@ jobs:
     steps:
       - name: "Checkout"
         uses: actions/checkout@v4
+        with:
+          clean: false  # not needed on GH runner, self-hosted do that with pre-scripts
 
       #- name: "Collect Workflow Telemetry"
       #  uses: catchpoint/workflow-telemetry-action@v2
@@ -52,6 +58,7 @@ jobs:
       - name: "Restore cache for CCache"
         uses: actions/cache/restore@v4
         id: restore-ccache
+        if: matrix.runner != 'self-hosted'
         with:
           path: ${{ github.workspace }}/.virtme/ccache
           key: ${{ runner.os }}_tests_${{ steps.branch.outputs.name }}-${{ matrix.mode }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
@@ -116,7 +123,7 @@ jobs:
             *.tap.xml
 
       - name: "Save cache for CCache"
-        if: always() && (github.repository_owner != 'multipath-tcp' || (github.ref_name == 'export' || github.ref_name == 'export-net'))
+        if: always() && matrix.runner != 'self-hosted' && (github.repository_owner != 'multipath-tcp' || (github.ref_name == 'export' || github.ref_name == 'export-net'))
         uses: actions/cache/save@v4
         with:
           path: ${{ github.workspace }}/.virtme/ccache
