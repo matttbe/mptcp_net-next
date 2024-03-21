@@ -622,6 +622,55 @@ static int mptcp_setsockopt_sol_tcp_congestion(struct mptcp_sock *msk, sockptr_t
 	return ret;
 }
 
+static int __mptcp_setsockopt_sol_tcp_keepalive(struct mptcp_sock *msk,
+						int optname, int val)
+{
+	struct mptcp_subflow_context *subflow;
+	int ret = 0;
+
+	switch (optname) {
+	case TCP_KEEPIDLE:
+		if (val < 1 || val > MAX_TCP_KEEPIDLE)
+			return -EINVAL;
+
+		msk->keepalive_idle = val;
+		break;
+	case TCP_KEEPINTVL:
+		if (val < 1 || val > MAX_TCP_KEEPINTVL)
+			return -EINVAL;
+
+		msk->keepalive_intvl = val;
+		break;
+	case TCP_KEEPCNT:
+		if (val < 1 || val > MAX_TCP_KEEPCNT)
+			return -EINVAL;
+
+		msk->keepalive_cnt = val;
+		break;
+	}
+	sockopt_seq_inc(msk);
+
+	mptcp_for_each_subflow(msk, subflow) {
+		struct sock *ssk = mptcp_subflow_tcp_sock(subflow);
+
+		lock_sock(ssk);
+		switch (optname) {
+		case TCP_KEEPIDLE:
+			ret |= tcp_sock_set_keepidle_locked(ssk, val);
+			break;
+		case TCP_KEEPINTVL:
+			ret |= tcp_sock_set_keepintvl(ssk, val);
+			break;
+		case TCP_KEEPCNT:
+			ret |= tcp_sock_set_keepcnt(ssk, val);
+			break;
+		}
+		release_sock(ssk);
+	}
+
+	return ret;
+}
+
 static int __mptcp_setsockopt_sol_tcp_cork(struct mptcp_sock *msk, int val)
 {
 	struct mptcp_subflow_context *subflow;
@@ -818,6 +867,10 @@ static int mptcp_setsockopt_sol_tcp(struct mptcp_sock *msk, int optname,
 	case TCP_NODELAY:
 		ret = __mptcp_setsockopt_sol_tcp_nodelay(msk, val);
 		break;
+	case TCP_KEEPIDLE:
+	case TCP_KEEPINTVL:
+	case TCP_KEEPCNT:
+		return __mptcp_setsockopt_sol_tcp_keepalive(msk, optname, val);
 	default:
 		ret = -ENOPROTOOPT;
 	}
@@ -1330,6 +1383,9 @@ static int mptcp_getsockopt_sol_tcp(struct mptcp_sock *msk, int optname,
 	case TCP_FASTOPEN_CONNECT:
 	case TCP_FASTOPEN_KEY:
 	case TCP_FASTOPEN_NO_COOKIE:
+	case TCP_KEEPIDLE:
+	case TCP_KEEPINTVL:
+	case TCP_KEEPCNT:
 		return mptcp_getsockopt_first_sf_only(msk, SOL_TCP, optname,
 						      optval, optlen);
 	case TCP_INQ:
@@ -1455,6 +1511,9 @@ static void sync_socket_options(struct mptcp_sock *msk, struct sock *ssk)
 		tcp_set_congestion_control(ssk, msk->ca_name, false, true);
 	__tcp_sock_set_cork(ssk, !!msk->cork);
 	__tcp_sock_set_nodelay(ssk, !!msk->nodelay);
+	tcp_sock_set_keepidle_locked(ssk, msk->keepalive_idle);
+	tcp_sock_set_keepintvl(ssk, msk->keepalive_intvl);
+	tcp_sock_set_keepcnt(ssk, msk->keepalive_cnt);
 
 	inet_assign_bit(TRANSPARENT, ssk, inet_test_bit(TRANSPARENT, sk));
 	inet_assign_bit(FREEBIND, ssk, inet_test_bit(FREEBIND, sk));
