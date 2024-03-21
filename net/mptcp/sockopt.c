@@ -623,48 +623,24 @@ static int mptcp_setsockopt_sol_tcp_congestion(struct mptcp_sock *msk, sockptr_t
 }
 
 static int __mptcp_setsockopt_sol_tcp_keepalive(struct mptcp_sock *msk,
-						int optname, int val)
+						int max,
+						int (*set_val)(struct sock *, int),
+						unsigned int *msk_val, int val)
 {
 	struct mptcp_subflow_context *subflow;
 	int ret = 0;
 
-	switch (optname) {
-	case TCP_KEEPIDLE:
-		if (val < 1 || val > MAX_TCP_KEEPIDLE)
-			return -EINVAL;
+	if (val < 1 || val > max)
+		return -EINVAL;
 
-		msk->keepalive_idle = val;
-		break;
-	case TCP_KEEPINTVL:
-		if (val < 1 || val > MAX_TCP_KEEPINTVL)
-			return -EINVAL;
-
-		msk->keepalive_intvl = val;
-		break;
-	case TCP_KEEPCNT:
-		if (val < 1 || val > MAX_TCP_KEEPCNT)
-			return -EINVAL;
-
-		msk->keepalive_cnt = val;
-		break;
-	}
+	*msk_val = val;
 	sockopt_seq_inc(msk);
 
 	mptcp_for_each_subflow(msk, subflow) {
 		struct sock *ssk = mptcp_subflow_tcp_sock(subflow);
 
 		lock_sock(ssk);
-		switch (optname) {
-		case TCP_KEEPIDLE:
-			ret |= tcp_sock_set_keepidle_locked(ssk, val);
-			break;
-		case TCP_KEEPINTVL:
-			ret |= tcp_sock_set_keepintvl(ssk, val);
-			break;
-		case TCP_KEEPCNT:
-			ret |= tcp_sock_set_keepcnt(ssk, val);
-			break;
-		}
+		ret |= set_val(ssk, val);
 		release_sock(ssk);
 	}
 
@@ -868,9 +844,23 @@ static int mptcp_setsockopt_sol_tcp(struct mptcp_sock *msk, int optname,
 		ret = __mptcp_setsockopt_sol_tcp_nodelay(msk, val);
 		break;
 	case TCP_KEEPIDLE:
+		ret= __mptcp_setsockopt_sol_tcp_keepalive(msk, MAX_TCP_KEEPIDLE,
+							  &tcp_sock_set_keepidle_locked,
+							  &msk->keepalive_idle,
+							  val);
+		break;
 	case TCP_KEEPINTVL:
+		ret= __mptcp_setsockopt_sol_tcp_keepalive(msk, MAX_TCP_KEEPINTVL,
+							  &tcp_sock_set_keepintvl,
+							  &msk->keepalive_intvl,
+							  val);
+		break;
 	case TCP_KEEPCNT:
-		return __mptcp_setsockopt_sol_tcp_keepalive(msk, optname, val);
+		ret= __mptcp_setsockopt_sol_tcp_keepalive(msk, MAX_TCP_KEEPCNT,
+							  &tcp_sock_set_keepcnt,
+							  (unsigned int *)&msk->keepalive_cnt,
+							  val);
+		break;
 	default:
 		ret = -ENOPROTOOPT;
 	}
