@@ -2,11 +2,8 @@
 /* Copyright (c) 2020, Tessares SA. */
 /* Copyright (c) 2024, Kylin Software */
 
-#include <sys/socket.h> // SOL_SOCKET, SO_MARK, ...
-#include <linux/tcp.h>  // TCP_CONGESTION
-#include <linux/bpf.h>
+#include "bpf_tracing_net.h"
 #include <bpf/bpf_helpers.h>
-#include "bpf_tcp_helpers.h"
 
 char _license[] SEC("license") = "GPL";
 
