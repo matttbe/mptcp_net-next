@@ -101,7 +101,7 @@ jobs:
           # github-token: ${{ secrets.GITHUB_TOKEN }}
           flag-name: ${{ matrix.mode }}
           # parallel: true
-          file: kernel.lcov
+          file: ${{ github.workspace }}/kernel.lcov
           format: lcov
           # allow-empty: true
           compare-ref: ${{ steps.branch.outputs.name }}
