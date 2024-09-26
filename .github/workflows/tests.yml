@@ -89,6 +89,28 @@ jobs:
             mptcp/mptcp-upstream-virtme-docker:${{ steps.branch.outputs.name == 'export' && 'latest' || 'net' }} \
               auto-${{ matrix.mode }}
 
+      - name: Coveralls Parallel
+        uses: coverallsapp/github-action@v2
+        with:
+          # github-token: ${{ secrets.GITHUB_TOKEN }}
+          flag-name: ${{ matrix.mode }}
+          parallel: true
+          file: kernel.lcov
+          format: lcov
+          # allow-empty: true
+          compare-ref: ${{ steps.branch.outputs.name }}
+          debug: true
+
+      - name: "Publish Test Results"
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          compare_to_earlier_commit: false
+          check_run: false
+          check_name: "Test Results (${{ matrix.mode }})"
+          files: |
+            *.tap.xml
+
       - name: "Publish conclusion"
         if: always()
         run: |
@@ -149,28 +171,6 @@ jobs:
           compression-level: 9
           path: |
             net/mptcp/*.[ch]
-
-      - name: Coveralls Parallel
-        uses: coverallsapp/github-action@v2
-        with:
-          # github-token: ${{ secrets.GITHUB_TOKEN }}
-          flag-name: ${{ matrix.mode }}
-          parallel: true
-          file: kernel.lcov
-          format: lcov
-          # allow-empty: true
-          compare-ref: ${{ steps.branch.outputs.name }}
-          debug: true
-
-      - name: "Publish Test Results"
-        uses: EnricoMi/publish-unit-test-result-action@v2
-        if: always()
-        with:
-          compare_to_earlier_commit: false
-          check_run: false
-          check_name: "Test Results (${{ matrix.mode }})"
-          files: |
-            *.tap.xml
 
       - name: "Save cache for CCache"
         if: always() && (github.repository_owner != 'multipath-tcp' || (github.ref_name == 'export' || github.ref_name == 'export-net'))
