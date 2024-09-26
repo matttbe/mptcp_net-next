@@ -89,12 +89,18 @@ jobs:
             mptcp/mptcp-upstream-virtme-docker:${{ steps.branch.outputs.name == 'export' && 'latest' || 'net' }} \
               auto-${{ matrix.mode }}
 
+      - name: "Check cover files"
+        run: |
+          du -hs kernel.lcov
+          echo $PWD
+          head kernel.lcov
+
       - name: Coveralls Parallel
         uses: coverallsapp/github-action@v2
         with:
           # github-token: ${{ secrets.GITHUB_TOKEN }}
           flag-name: ${{ matrix.mode }}
-          parallel: true
+          # parallel: true
           file: kernel.lcov
           format: lcov
           # allow-empty: true
@@ -201,13 +207,13 @@ jobs:
           files: |
             results-*/*.tap.xml
 
-      - name: Coveralls Finished
-        uses: coverallsapp/github-action@v2
-        with:
-          # github-token: ${{ secrets.GITHUB_TOKEN }}
-          parallel-finished: true
-          carryforward: "btf" # "normal,debug,btf"
-          debug: true
+      # - name: Coveralls Finished
+      #   uses: coverallsapp/github-action@v2
+      #   with:
+      #     # github-token: ${{ secrets.GITHUB_TOKEN }}
+      #     parallel-finished: true
+      #     carryforward: "btf" # "normal,debug,btf"
+      #     debug: true
 
   notif:
     name: "Notifications"
