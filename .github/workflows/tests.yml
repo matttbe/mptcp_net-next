@@ -31,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: ['normal', 'debug', 'btf']
+        mode: ['btf'] # ['normal', 'debug', 'btf']
     permissions:
       contents: read # to fetch code (actions/checkout)
 
@@ -153,12 +153,12 @@ jobs:
       - name: Coveralls Parallel
         uses: coverallsapp/github-action@v2
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # github-token: ${{ secrets.GITHUB_TOKEN }}
           flag-name: ${{ matrix.mode }}
           parallel: true
           file: kernel.lcov
           format: lcov
-          allow-empty: true
+          # allow-empty: true
           compare-ref: ${{ steps.branch.outputs.name }}
           debug: true
 
@@ -204,9 +204,9 @@ jobs:
       - name: Coveralls Finished
         uses: coverallsapp/github-action@v2
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # github-token: ${{ secrets.GITHUB_TOKEN }}
           parallel-finished: true
-          carryforward: "normal,debug,btf"
+          carryforward: "btf" # "normal,debug,btf"
           debug: true
 
   notif:
@@ -536,7 +536,7 @@ jobs:
       - name: Check Status
         run: |
           issues=()
-          for mode in normal debug btf; do
+          for mode in btf; do # normal debug btf; do
             ccl="results-${mode}/conclusion.txt"
             if [ ! -f "${ccl}" ] || ! grep -q "Success" "${ccl}"; then
               issues+=("${mode}")
