@@ -1,1 +1,1 @@
-t/bpf-Export-more-bpf_burst-related-functions
+t/selftests-bpf-Add-bpf_red-scheduler
