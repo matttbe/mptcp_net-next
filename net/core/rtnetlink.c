@@ -210,6 +210,17 @@ void rtnl_net_unlock(struct net *net)
 }
 EXPORT_SYMBOL(rtnl_net_unlock);
 
+int rtnl_net_trylock(struct net *net)
+{
+	int ret = rtnl_trylock();
+
+	if (ret)
+		__rtnl_net_lock(net);
+
+	return ret;
+}
+EXPORT_SYMBOL(rtnl_net_trylock);
+
 static int rtnl_net_cmp_locks(const struct net *net_a, const struct net *net_b)
 {
 	if (net_eq(net_a, net_b))
@@ -697,7 +708,7 @@ static void rtnl_af_put(struct rtnl_af_ops *ops, int srcu_index)
  * rtnl_af_register - Register rtnl_af_ops with rtnetlink.
  * @ops: struct rtnl_af_ops * to register
  *
- * Returns 0 on success or a negative error code.
+ * Return: 0 on success or a negative error code.
  */
 int rtnl_af_register(struct rtnl_af_ops *ops)
 {
