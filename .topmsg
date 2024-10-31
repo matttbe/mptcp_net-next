@@ -1,4 +1,12 @@
-From: Matthieu Baerts (NGI0) <matttbe@kernel.org>
-Subject: [PATCH] t/mptcp-use-sock_kfree_s-instead-of-kfree
+From: Geliang Tang <tanggeliang@kylinos.cn>
+Subject: [PATCH] mptcp: use sock_kfree_s instead of kfree
 
-Signed-off-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
+The local address entries on userspace_pm_local_addr_list are allocated
+by sock_kmalloc().
+
+It's then required to use sock_kfree_s() instead of kfree() to free
+these entries in order to adjust the allocated size on the sk side.
+
+Fixes: 24430f8bf516 ("mptcp: add address into userspace pm list")
+Signed-off-by: Geliang Tang <tanggeliang@kylinos.cn>
+Reviewed-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
