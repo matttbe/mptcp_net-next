@@ -520,7 +520,7 @@ close_server:
 static void test_iters_subflow(void)
 {
 	struct mptcp_bpf_iters *skel;
-	struct nstoken *nstoken;
+	struct netns_obj *netns;
 	int cgroup_fd;
 
 	cgroup_fd = test__join_cgroup("/iters_subflow");
@@ -536,8 +536,8 @@ static void test_iters_subflow(void)
 	if (!ASSERT_OK_PTR(skel->links.iters_subflow, "attach getsockopt"))
 		goto skel_destroy;
 
-	nstoken = create_netns();
-	if (!ASSERT_OK_PTR(nstoken, "create_netns: iters_subflow"))
+	netns = netns_new(NS_TEST, true);
+	if (!ASSERT_OK_PTR(netns, "netns_new: iters_subflow"))
 		goto skel_destroy;
 
 	if (endpoint_init("subflow", 4) < 0)
@@ -549,19 +549,19 @@ static void test_iters_subflow(void)
 	ASSERT_EQ(skel->bss->ids, 10, "subflow ids");
 
 close_netns:
-	cleanup_netns(nstoken);
+	netns_free(netns);
 skel_destroy:
 	mptcp_bpf_iters__destroy(skel);
 close_cgroup:
 	close(cgroup_fd);
 }
 
-static struct nstoken *sched_init(char *flags, char *sched)
+static struct netns_obj *sched_init(char *flags, char *sched)
 {
-	struct nstoken *nstoken;
+	struct netns_obj *netns;
 
-	nstoken = create_netns();
-	if (!ASSERT_OK_PTR(nstoken, "create_netns"))
+	netns = netns_new(NS_TEST, true);
+	if (!ASSERT_OK_PTR(netns, "netns_new"))
 		return NULL;
 
 	if (endpoint_init("subflow", 2) < 0)
@@ -569,9 +569,9 @@ static struct nstoken *sched_init(char *flags, char *sched)
 
 	SYS(fail, "ip netns exec %s sysctl -qw net.mptcp.scheduler=%s", NS_TEST, sched);
 
-	return nstoken;
+	return netns;
 fail:
-	cleanup_netns(nstoken);
+	netns_free(netns);
 	return NULL;
 }
 
@@ -629,16 +629,16 @@ fail:
 
 static void test_default(void)
 {
-	struct nstoken *nstoken;
+	struct netns_obj *netns;
 
-	nstoken = sched_init("subflow", "default");
-	if (!nstoken)
+	netns = sched_init("subflow", "default");
+	if (!netns)
 		goto fail;
 
 	send_data_and_verify("default", WITH_DATA, WITH_DATA);
 
 fail:
-	cleanup_netns(nstoken);
+	netns_free(netns);
 }
 
 void test_mptcp(void)
