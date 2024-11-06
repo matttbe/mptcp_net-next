@@ -1,4 +1,13 @@
-From: Matthieu Baerts (NGI0) <matttbe@kernel.org>
-Subject: [PATCH] t/selftests-bpf-Drop-netns-helpers-in-mptcp
+From: Geliang Tang <tanggeliang@kylinos.cn>
+Subject: [PATCH] selftests/bpf: Drop netns helpers in mptcp
 
+New netns selftest helpers netns_new() and netns_free() has been added
+in network_helpers.c, let's use them in mptcp selftests too instead of
+using MPTCP's own helpers create_netns() and cleanup_netns().
+
+Signed-off-by: Geliang Tang <tanggeliang@kylinos.cn>
+Reviewed-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
+Link: https://lore.kernel.org/r/c02fda3177b34f9e74a044833fda9761627f4d07.1730338692.git.tanggeliang@kylinos.cn
+Signed-off-by: Martin KaFai Lau <martin.lau@kernel.org>
+(cherry picked from commit ac1bd50164b7995d0b8337b25d52ae79eefb9487)
 Signed-off-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
