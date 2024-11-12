@@ -1,4 +1,17 @@
 From: Matthieu Baerts (NGI0) <matttbe@kernel.org>
-Subject: [PATCH] t/mptcp-pm-use-_rcu-variant-under-rcu_read_lock
+Subject: [PATCH] mptcp: pm: use _rcu variant under rcu_read_lock
 
+In mptcp_pm_create_subflow_or_signal_addr(), rcu_read_(un)lock() are
+used as expected to iterate over the list of local addresses, but
+list_for_each_entry() was used instead of list_for_each_entry_rcu() in
+__lookup_addr(). It is important to use this variant which adds the
+required READ_ONCE() (and diagnostic checks if enabled).
+
+Because __lookup_addr() is also used in mptcp_pm_nl_set_flags() where it
+is called under the pernet->lock and not rcu_read_lock(), an extra
+condition is then passed to help the diagnostic checks making sure
+either the associated spin lock or the RCU lock is held.
+
+Fixes: 86e39e04482b ("mptcp: keep track of local endpoint still available for each msk")
+Reviewed-by: Geliang Tang <geliang@kernel.org>
 Signed-off-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
