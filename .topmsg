@@ -1,5 +1,5 @@
 From: Matthieu Baerts (NGI0) <matttbe@kernel.org>
-Subject: [PATCH] mptcp: pm: lockless list traversal to dump endpoints
+Subject: [PATCH] mptcp: pm: lockless list traversal to dump endp
 
 To return an endpoint to the userspace via Netlink, and to dump all of
 them, the endpoint list was iterated while holding the pernet->lock, but
