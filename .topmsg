@@ -1,4 +1,17 @@
 From: Matthieu Baerts (NGI0) <matttbe@kernel.org>
-Subject: [PATCH] t/mptcp-pm-lockless-list-traversal-to-dump-endpoints
+Subject: [PATCH] mptcp: pm: lockless list traversal to dump endpoints
 
+To return an endpoint to the userspace via Netlink, and to dump all of
+them, the endpoint list was iterated while holding the pernet->lock, but
+only to read the content of the list.
+
+In these cases, the spin locks can be replaced by RCU read ones, and use
+the _rcu variants to iterate over the entries list in a lockless way.
+
+Note that the __lookup_addr_by_id() helper has been modified to use the
+_rcu variants of list_for_each_entry(), but with an extra conditions, so
+it can be called either while the RCU read lock is held, or when the
+associated pernet->lock is held.
+
+Reviewed-by: Geliang Tang <geliang@kernel.org>
 Signed-off-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
