@@ -1,4 +1,13 @@
-From: Matthieu Baerts (NGI0) <matttbe@kernel.org>
-Subject: [PATCH] t/tcp-check-space-before-adding-MPTCP-SYN-options
+From: MoYuanhao <moyuanhao3676@163.com>
+Subject: [PATCH] tcp: check space before adding MPTCP SYN options
 
-Signed-off-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
+Ensure there is enough space before adding MPTCP options in
+tcp_syn_options().
+
+Without this check, 'remaining' could underflow, and causes issues. If
+there is not enough space, MPTCP should not be used.
+
+Signed-off-by: MoYuanhao <moyuanhao3676@163.com>
+Fixes: cec37a6e41aa ("mptcp: Handle MP_CAPABLE options for outgoing connections")
+Acked-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
+[ Matt: Add Fixes, cc Stable, update Description ]
