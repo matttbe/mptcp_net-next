@@ -1,4 +1,12 @@
-From: Matthieu Baerts (NGI0) <matttbe@kernel.org>
-Subject: [PATCH] t/mptcp-add-mptcp_for_each_userspace_pm_addr-macro
+From: Geliang Tang <tanggeliang@kylinos.cn>
+Subject: [PATCH] mptcp: add mptcp_for_each_userspace_pm_addr macro
 
-Signed-off-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
+Similar to mptcp_for_each_subflow() macro, this patch adds a new macro
+mptcp_for_each_userspace_pm_addr() for userspace PM to iterate over the
+address entries on the local address list userspace_pm_local_addr_list
+of the mptcp socket.
+
+This patch doesn't change the behaviour of the code, just refactoring.
+
+Signed-off-by: Geliang Tang <tanggeliang@kylinos.cn>
+Reviewed-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
