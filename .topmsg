@@ -1,4 +1,17 @@
-From: Matthieu Baerts (NGI0) <matttbe@kernel.org>
-Subject: [PATCH] t/mptcp-move-mptcp_pm_remove_addrs-into-pm_userspace
+From: Geliang Tang <tanggeliang@kylinos.cn>
+Subject: [PATCH] mptcp: move mptcp_pm_remove_addrs into pm_userspace
 
-Signed-off-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
+Since mptcp_pm_remove_addrs() is only called from the userspace PM, this
+patch moves it into pm_userspace.c.
+
+For this, lookup_subflow_by_saddr() and remove_anno_list_by_saddr()
+helpers need to be exported in protocol.h. Also add "mptcp_" prefix for
+these helpers.
+
+Here, mptcp_pm_remove_addrs() is not changed to a static function because
+it will be used in BPF Path Manager.
+
+This patch doesn't change the behaviour of the code, just refactoring.
+
+Signed-off-by: Geliang Tang <tanggeliang@kylinos.cn>
+Reviewed-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
