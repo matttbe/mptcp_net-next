@@ -1,4 +1,16 @@
 From: Matthieu Baerts (NGI0) <matttbe@kernel.org>
-Subject: [PATCH] t/netlink-specs-mptcp-clearly-mention-attributes
+Subject: [PATCH] netlink: specs: mptcp: clearly mention attributes
 
+The rendered version of the MPTCP events [1] looked strange, because the
+whole content of the 'doc' was displayed in the same block.
+
+It was then not clear that the first words, not even ended by a period,
+were the attributes that are defined when such events are emitted. These
+attributes have now been moved to the end, prefixed by 'Attributes:' and
+ended with a period. Note that '>-' has been added after 'doc:' to allow
+':' in the text below.
+
+Fixes: bc8aeb2045e2 ("Documentation: netlink: add a YAML spec for mptcp")
+Link: https://docs.kernel.org/networking/netlink_spec/mptcp_pm.html#event-type [1]
+Reviewed-by: Geliang Tang <geliang@kernel.org>
 Signed-off-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
