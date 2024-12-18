@@ -1,4 +1,9 @@
 From: Matthieu Baerts (NGI0) <matttbe@kernel.org>
-Subject: [PATCH] t/netlink-specs-mptcp-add-missing-server-side-attr
+Subject: [PATCH] netlink: specs: mptcp: add missing 'server-side' attr
 
+This attribute is added with the 'created' and 'established' events, but
+the documentation didn't mention it.
+
+Fixes: 41b3c69bf941 ("mptcp: expose server_side attribute in MPTCP netlink events")
+Reviewed-by: Geliang Tang <geliang@kernel.org>
 Signed-off-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
