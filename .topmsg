@@ -1,4 +1,25 @@
-From: Matthieu Baerts (NGI0) <matttbe@kernel.org>
-Subject: [PATCH] t/mptcp-move-the-whole-rx-path-under-msk-socket-lock-protection
+From: Paolo Abeni <pabeni@redhat.com>
+Subject: [PATCH] mptcp: move the whole rx path under msk socket lock protection
 
-Signed-off-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
+After commit c2e6048fa1cf ("mptcp: fix race in release_cb") we can
+move the whole MPTCP rx path under the socket lock leveraging the
+release_cb.
+
+We can drop a bunch of spin_lock pairs in the receive functions, use
+a single receive queue and invoke __mptcp_move_skbs only when subflows
+ask for it.
+
+This will allow more cleanup in the next patch.
+
+Some changes are worth specific mention:
+
+The msk rcvbuf update now always happens under both the msk and the
+subflow socket lock: we can drop a bunch of ONCE annotation and
+consolidate the checks.
+
+When the skbs move is delayed at msk release callback time, even the
+msk rcvbuf update is delayed; additionally take care of such action in
+__mptcp_move_skbs().
+
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+Reviewed-by: Mat Martineau <martineau@kernel.org>
