@@ -1,4 +1,8 @@
-From: Matthieu Baerts (NGI0) <matttbe@kernel.org>
-Subject: [PATCH] t/mptcp-dismiss-__mptcp_rmem
+From: Paolo Abeni <pabeni@redhat.com>
+Subject: [PATCH] mptcp: dismiss __mptcp_rmem()
 
-Signed-off-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
+After the RX path refactor, it become a wrapper for sk_rmem_alloc
+access, with a slightly misleading name. Just drop it.
+
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+Reviewed-by: Mat Martineau <martineau@kernel.org>
