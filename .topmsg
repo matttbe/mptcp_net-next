@@ -1,4 +1,9 @@
-From: Matthieu Baerts (NGI0) <matttbe@kernel.org>
-Subject: [PATCH] t/mptcp-cleanup-mem-accounting
+From: Paolo Abeni <pabeni@redhat.com>
+Subject: [PATCH] mptcp: cleanup mem accounting
 
-Signed-off-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
+After the previous patch, updating sk_forward_memory is cheap and
+we can drop a lot of complexity from the MPTCP memory accounting,
+removing the custom fwd mem allocations for rmem.
+
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+Reviewed-by: Mat Martineau <martineau@kernel.org>
