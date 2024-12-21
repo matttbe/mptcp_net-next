@@ -1,4 +1,13 @@
-From: Matthieu Baerts (NGI0) <matttbe@kernel.org>
-Subject: [PATCH] t/mptcp-don-t-always-assume-copied-data-in-mptcp_cleanup_rbuf
+From: Paolo Abeni <pabeni@redhat.com>
+Subject: [PATCH] mptcp: don't always assume copied data in mptcp_cleanup_rbuf()
 
-Signed-off-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
+Under some corner cases the MPTCP protocol can end-up invoking
+mptcp_cleanup_rbuf() when no data has been copied, but such helper
+assumes the opposite condition.
+
+Explicitly drop such assumption and performs the costly call only
+when strictly needed - before releasing the msk socket lock.
+
+Fixes: fd8976790a6c ("mptcp: be careful on MPTCP-level ack.")
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+Reviewed-by: Mat Martineau <martineau@kernel.org>
