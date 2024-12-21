@@ -11,6 +11,5 @@ While at it, also uniform the capital letters, avoid double spaces, and
 fix the "announce" event description: a new "address" has been
 announced, not a new "subflow".
 
-Fixes: bc8aeb2045e2 ("Documentation: netlink: add a YAML spec for mptcp")
 Reviewed-by: Geliang Tang <geliang@kernel.org>
 Signed-off-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
