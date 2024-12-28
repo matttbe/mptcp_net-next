@@ -1,4 +1,13 @@
-From: Matthieu Baerts (NGI0) <matttbe@kernel.org>
-Subject: [PATCH] t/mptcp-fix-for-setting-remote-ipv4mapped-address
+From: Geliang Tang <tanggeliang@kylinos.cn>
+Subject: [PATCH] mptcp: fix for setting remote ipv4mapped address
 
-Signed-off-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
+Commit 1c670b39cec7 ("mptcp: change local addr type of subflow_destroy")
+introduced a bug in mptcp_pm_nl_subflow_destroy_doit().
+
+ipv6_addr_set_v4mapped() should be called to set the remote ipv4 address
+'addr_r.addr.s_addr' to the remote ipv6 address 'addr_r.addr6', not
+'addr_l.addr.addr6', which is the local ipv6 address.
+
+Fixes: 1c670b39cec7 ("mptcp: change local addr type of subflow_destroy")
+Signed-off-by: Geliang Tang <tanggeliang@kylinos.cn>
+Reviewed-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
