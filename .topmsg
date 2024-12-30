@@ -1,5 +1,5 @@
 From: Paolo Abeni <pabeni@redhat.com>
-Subject: [PATCH] mptcp: prevent excessive coalescing on receive (net)
+Subject: [PATCH] mptcp: prevent excessive coalescing on receive
 
 Currently the skb size after coalescing is only limited by the skb
 layout (the skb must not carry frag_list). A single coalesced skb
