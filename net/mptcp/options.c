@@ -658,7 +658,7 @@ static bool mptcp_established_options_add_addr(struct sock *sk, struct sk_buff *
 	 * MPC/MPJ handshakes
 	 */
 	if (!mptcp_pm_should_add_signal(msk) ||
-	    (opts->suboptions & (OPTION_MPTCP_MPJ_ACK | OPTION_MPTCP_MPC_ACK)) ||
+	    (opts->suboptions & (OPTION_MPTCP_MPJ_ACK | OPTION_MPTCP_MPC_ACK | OPTION_MPTCP_DSS)) ||
 	    !mptcp_pm_add_addr_signal(msk, skb, opt_size, remaining, &opts->addr,
 		    &echo, &drop_other_suboptions))
 		return false;
@@ -669,8 +669,6 @@ static bool mptcp_established_options_add_addr(struct sock *sk, struct sk_buff *
 	 */
 	if (drop_other_suboptions)
 		remaining += opt_size;
-	else if (opts->suboptions & OPTION_MPTCP_DSS)
-		return false;
 
 	len = mptcp_add_addr_len(opts->addr.family, echo, !!opts->addr.port);
 	if (remaining < len)
