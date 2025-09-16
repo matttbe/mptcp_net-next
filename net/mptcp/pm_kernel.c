@@ -187,7 +187,7 @@ static unsigned int fill_remote_addresses_vec(struct mptcp_sock *msk,
 		if (!mptcp_pm_addr_families_match(sk, local, &remote))
 			return 0;
 
-		msk->pm.subflows++;
+		msk->pm.extra_subflows++;
 		addrs[i++] = remote;
 	} else {
 		DECLARE_BITMAP(unavail_id, MPTCP_PM_MAX_ADDR_ID + 1);
@@ -213,12 +213,12 @@ static unsigned int fill_remote_addresses_vec(struct mptcp_sock *msk,
 			if (!mptcp_pm_addr_families_match(sk, local, &addrs[i]))
 				continue;
 
-			if (msk->pm.subflows < subflows_max) {
+			if (msk->pm.extra_subflows < subflows_max) {
 				/* forbid creating multiple address towards
 				 * this id
 				 */
 				__set_bit(addrs[i].id, unavail_id);
-				msk->pm.subflows++;
+				msk->pm.extra_subflows++;
 				i++;
 			}
 		}
@@ -295,7 +295,7 @@ static void mptcp_pm_create_subflow_or_signal_addr(struct mptcp_sock *msk)
 	pr_debug("local %d:%d signal %d:%d subflows %d:%d\n",
 		 msk->pm.local_addr_used, local_addr_max,
 		 msk->pm.add_addr_signaled, add_addr_signal_max,
-		 msk->pm.subflows, subflows_max);
+		 msk->pm.extra_subflows, subflows_max);
 
 	/* check first for announce */
 	if (msk->pm.add_addr_signaled < add_addr_signal_max) {
@@ -335,7 +335,7 @@ static void mptcp_pm_create_subflow_or_signal_addr(struct mptcp_sock *msk)
 subflow:
 	/* check if should create a new subflow */
 	while (msk->pm.local_addr_used < local_addr_max &&
-	       msk->pm.subflows < subflows_max) {
+	       msk->pm.extra_subflows < subflows_max) {
 		struct mptcp_addr_info addrs[MPTCP_PM_ADDR_MAX];
 		bool fullmesh;
 		int i, nr;
@@ -414,10 +414,10 @@ fill_local_addresses_vec_fullmesh(struct mptcp_sock *msk,
 					  local->addr.port))
 			local->addr.id = 0;
 
-		msk->pm.subflows++;
+		msk->pm.extra_subflows++;
 		i++;
 
-		if (msk->pm.subflows >= subflows_max)
+		if (msk->pm.extra_subflows >= subflows_max)
 			break;
 	}
 	rcu_read_unlock();
@@ -456,10 +456,10 @@ fill_local_addresses_vec_c_flag(struct mptcp_sock *msk,
 			continue;
 
 		msk->pm.local_addr_used++;
-		msk->pm.subflows++;
+		msk->pm.extra_subflows++;
 		i++;
 
-		if (msk->pm.subflows >= subflows_max)
+		if (msk->pm.extra_subflows >= subflows_max)
 			break;
 	}
 
@@ -483,7 +483,7 @@ fill_local_address_any(struct mptcp_sock *msk, struct mptcp_addr_info *remote,
 	if (!mptcp_pm_addr_families_match(sk, &local->addr, remote))
 		return 0;
 
-	msk->pm.subflows++;
+	msk->pm.extra_subflows++;
 
 	return 1;
 }
@@ -559,7 +559,7 @@ static void mptcp_pm_nl_add_addr_received(struct mptcp_sock *msk)
 		if (remote.id)
 			msk->pm.add_addr_accepted++;
 		if (msk->pm.add_addr_accepted >= add_addr_accept_max ||
-		    msk->pm.subflows >= subflows_max)
+		    msk->pm.extra_subflows >= subflows_max)
 			WRITE_ONCE(msk->pm.accept_addr, false);
 	}
 }
@@ -1401,7 +1401,7 @@ bool mptcp_pm_nl_check_work_pending(struct mptcp_sock *msk)
 {
 	struct pm_nl_pernet *pernet = pm_nl_get_pernet_from_msk(msk);
 
-	if (msk->pm.subflows == mptcp_pm_get_subflows_max(msk) ||
+	if (msk->pm.extra_subflows == mptcp_pm_get_subflows_max(msk) ||
 	    (find_next_and_bit(pernet->id_bitmap, msk->pm.id_avail_bitmap,
 			       MPTCP_PM_MAX_ADDR_ID + 1, 0) == MPTCP_PM_MAX_ADDR_ID + 1)) {
 		WRITE_ONCE(msk->pm.work_pending, false);
