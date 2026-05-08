@@ -890,7 +890,8 @@ void mptcp_pm_mp_fail_received(struct sock *sk, u64 fail_seq)
 bool mptcp_pm_add_addr_signal(struct mptcp_sock *msk, const struct sk_buff *skb,
 			      unsigned int opt_size, unsigned int remaining,
 			      struct mptcp_addr_info *addr, bool *echo,
-			      bool *drop_other_suboptions)
+			      unsigned int *len, bool *drop_other_suboptions,
+			      bool *drop_ts)
 {
 	bool skip_add_addr = false;
 	int ret = false;
@@ -926,11 +927,17 @@ bool mptcp_pm_add_addr_signal(struct mptcp_sock *msk, const struct sk_buff *skb,
 		family = msk->pm.local.family;
 	}
 
-	if (remaining < mptcp_add_addr_len(family, *echo, port)) {
+	*len = mptcp_add_addr_len(family, *echo, port);
+	if (remaining < *len) {
 		struct net *net = sock_net((struct sock *)msk);
 
 		if (!*drop_other_suboptions)
 			goto out_unlock;
+
+		/* OK without TCP Timestamp? */
+		*len -= TCPOLEN_TSTAMP_ALIGNED;
+		if (*drop_ts && remaining >= *len)
+			goto drop_ts;
 
 		if (*echo) {
 			MPTCP_INC_STATS(net, MPTCP_MIB_ECHOADDTXDROP);
@@ -939,8 +946,11 @@ bool mptcp_pm_add_addr_signal(struct mptcp_sock *msk, const struct sk_buff *skb,
 			MPTCP_INC_STATS(net, MPTCP_MIB_ADDADDRTXDROP);
 		}
 		goto drop_signal_mark;
+	} else {
+		*drop_ts = false;
 	}
 
+drop_ts:
 	ret = true;
 
 drop_signal_mark:
