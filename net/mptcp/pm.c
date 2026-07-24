@@ -1134,7 +1134,11 @@ void mptcp_pm_worker(struct mptcp_sock *msk)
 		pm->status &= ~BIT(MPTCP_PM_RM_ADDR_RECEIVED);
 		mptcp_pm_rm_addr_recv(msk);
 	}
-	__mptcp_pm_kernel_worker(msk);
+
+	if (mptcp_pm_is_kernel(msk))
+		__mptcp_pm_kernel_worker(msk);
+	else if (mptcp_pm_is_userspace(msk))
+		__mptcp_pm_userspace_worker(msk);
 
 	spin_unlock_bh(&msk->pm.lock);
 }

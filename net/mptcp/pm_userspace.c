@@ -209,12 +209,6 @@ int mptcp_pm_nl_announce_doit(struct sk_buff *skb, struct genl_info *info)
 	if (err < 0)
 		goto announce_err;
 
-	if (addr_val.addr.id == 0) {
-		NL_SET_ERR_MSG_ATTR(info->extack, addr, "invalid addr id");
-		err = -EINVAL;
-		goto announce_err;
-	}
-
 	if (!(addr_val.flags & MPTCP_PM_ADDR_FLAG_SIGNAL)) {
 		NL_SET_ERR_MSG_ATTR(info->extack, addr, "invalid addr flags");
 		err = -EINVAL;
@@ -243,37 +237,6 @@ int mptcp_pm_nl_announce_doit(struct sk_buff *skb, struct genl_info *info)
 	err = 0;
  announce_err:
 	sock_put(sk);
-	return err;
-}
-
-static int mptcp_userspace_pm_remove_id_zero_address(struct mptcp_sock *msk)
-{
-	struct mptcp_rm_list list = { .nr = 0 };
-	struct mptcp_subflow_context *subflow;
-	struct sock *sk = (struct sock *)msk;
-	bool has_id_0 = false;
-	int err = -EINVAL;
-
-	lock_sock(sk);
-	mptcp_for_each_subflow(msk, subflow) {
-		if (READ_ONCE(subflow->local_id) == 0) {
-			has_id_0 = true;
-			break;
-		}
-	}
-	if (!has_id_0)
-		goto remove_err;
-
-	list.ids[list.nr++] = 0;
-
-	spin_lock_bh(&msk->pm.lock);
-	mptcp_pm_remove_addr(msk, &list);
-	spin_unlock_bh(&msk->pm.lock);
-
-	err = 0;
-
-remove_err:
-	release_sock(sk);
 	return err;
 }
 
@@ -317,11 +280,6 @@ int mptcp_pm_nl_remove_doit(struct sk_buff *skb, struct genl_info *info)
 		return err;
 
 	sk = (struct sock *)msk;
-
-	if (id_val == 0) {
-		err = mptcp_userspace_pm_remove_id_zero_address(msk);
-		goto out;
-	}
 
 	lock_sock(sk);
 
@@ -692,6 +650,35 @@ int mptcp_userspace_pm_get_addr(u8 id, struct mptcp_pm_addr_entry *addr,
 	return ret;
 }
 
+/* Called under PM lock */
+void __mptcp_pm_userspace_worker(struct mptcp_sock *msk)
+{
+	struct mptcp_pm_data *pm = &msk->pm;
+
+	if (pm->status & BIT(MPTCP_PM_ESTABLISHED)) {
+		struct mptcp_pm_addr_entry *entry;
+
+		pm->status &= ~BIT(MPTCP_PM_ESTABLISHED);
+
+		entry = sock_kmalloc((struct sock *)msk, sizeof(*entry), GFP_ATOMIC);
+		/* TODO: enomem */
+
+		list_add_tail_rcu(&entry->list, &pm->userspace_pm_local_addr_list);
+		mptcp_local_address((struct sock_common *)msk, &entry->addr);
+		entry->flags = 0;
+		entry->ifindex = 0;
+		entry->lsk = NULL;
+
+		WRITE_ONCE(pm->work_pending, false);
+	}
+}
+
+static void mptcp_pm_userspace_init(struct mptcp_sock *msk)
+{
+	/* Just to get the fully established event */
+	WRITE_ONCE(msk->pm.work_pending, true);
+}
+
 static void mptcp_pm_userspace_release(struct mptcp_sock *msk)
 {
 	mptcp_userspace_pm_free_local_addr_list(msk);
@@ -700,6 +687,7 @@ static void mptcp_pm_userspace_release(struct mptcp_sock *msk)
 static struct mptcp_pm_ops mptcp_pm_userspace = {
 	.get_local_id		= mptcp_pm_userspace_get_local_id,
 	.get_priority		= mptcp_pm_userspace_get_priority,
+	.init			= mptcp_pm_userspace_init,
 	.release		= mptcp_pm_userspace_release,
 	.name			= "userspace",
 	.owner			= THIS_MODULE,
