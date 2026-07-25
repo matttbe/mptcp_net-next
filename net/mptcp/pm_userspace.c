@@ -666,6 +666,7 @@ void __mptcp_pm_userspace_worker(struct mptcp_sock *msk)
 
 		list_add_tail_rcu(&entry->list, &pm->userspace_pm_local_addr_list);
 		mptcp_local_address((struct sock_common *)msk, &entry->addr);
+		entry->addr.id = 0;
 		entry->flags = 0;
 		entry->ifindex = 0;
 		entry->lsk = NULL;
