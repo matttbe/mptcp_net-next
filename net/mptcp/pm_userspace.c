@@ -55,7 +55,8 @@ static int mptcp_userspace_pm_append_new_local_addr(struct mptcp_sock *msk,
 
 	spin_lock_bh(&msk->pm.lock);
 	mptcp_for_each_userspace_pm_addr(msk, e) {
-		addr_match = mptcp_addresses_equal(&e->addr, &entry->addr, true);
+		addr_match = mptcp_addresses_equal(&e->addr, &entry->addr,
+						   entry->addr.port != 0);
 		if (addr_match && entry->addr.id == 0 && needs_id)
 			entry->addr.id = e->addr.id;
 		id_match = (e->addr.id == entry->addr.id);
@@ -606,7 +607,8 @@ int mptcp_userspace_pm_dump_addr(struct sk_buff *msg,
 	lock_sock(sk);
 	spin_lock_bh(&msk->pm.lock);
 	mptcp_for_each_userspace_pm_addr(msk, entry) {
-		if (entry->addr.id == 0 ||
+		/* Ignore default ID0 & already sent */
+		if ((entry->addr.id == 0 && entry->flags == 0) ||
 		    test_bit(entry->addr.id, bitmap->map))
 			continue;
 
@@ -651,34 +653,18 @@ int mptcp_userspace_pm_get_addr(u8 id, struct mptcp_pm_addr_entry *addr,
 	return ret;
 }
 
-/* Called under PM lock */
-void __mptcp_pm_userspace_worker(struct mptcp_sock *msk)
+void mptcp_pm_userspace_created(struct mptcp_sock *msk, const struct sock *ssk)
 {
-	struct mptcp_pm_data *pm = &msk->pm;
+	struct mptcp_pm_addr_entry *entry;
 
-	if (pm->status & BIT(MPTCP_PM_ESTABLISHED)) {
-		struct mptcp_pm_addr_entry *entry;
+	entry = sock_kmalloc((struct sock *)msk, sizeof(*entry), GFP_ATOMIC);
+	if (!entry)
+		return;
 
-		pm->status &= ~BIT(MPTCP_PM_ESTABLISHED);
+	memset(entry, 0, sizeof(*entry));
+	mptcp_local_address((struct sock_common *)ssk, &entry->addr);
 
-		entry = sock_kmalloc((struct sock *)msk, sizeof(*entry), GFP_ATOMIC);
-		/* TODO: enomem */
-
-		list_add_tail_rcu(&entry->list, &pm->userspace_pm_local_addr_list);
-		mptcp_local_address((struct sock_common *)msk, &entry->addr);
-		entry->addr.id = 0;
-		entry->flags = 0;
-		entry->ifindex = 0;
-		entry->lsk = NULL;
-
-		WRITE_ONCE(pm->work_pending, false);
-	}
-}
-
-static void mptcp_pm_userspace_init(struct mptcp_sock *msk)
-{
-	/* Just to get the fully established event */
-	WRITE_ONCE(msk->pm.work_pending, true);
+	list_add_tail_rcu(&entry->list, &msk->pm.userspace_pm_local_addr_list);
 }
 
 static void mptcp_pm_userspace_release(struct mptcp_sock *msk)
@@ -689,7 +675,6 @@ static void mptcp_pm_userspace_release(struct mptcp_sock *msk)
 static struct mptcp_pm_ops mptcp_pm_userspace = {
 	.get_local_id		= mptcp_pm_userspace_get_local_id,
 	.get_priority		= mptcp_pm_userspace_get_priority,
-	.init			= mptcp_pm_userspace_init,
 	.release		= mptcp_pm_userspace_release,
 	.name			= "userspace",
 	.owner			= THIS_MODULE,

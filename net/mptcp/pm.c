@@ -548,6 +548,10 @@ void mptcp_pm_new_connection(struct mptcp_sock *msk, const struct sock *ssk, int
 	pr_debug("msk=%p, token=%u side=%d\n", msk, READ_ONCE(msk->token), server_side);
 
 	WRITE_ONCE(pm->server_side, server_side);
+
+	if (mptcp_pm_is_userspace(msk))
+		mptcp_pm_userspace_created(msk, ssk);
+
 	mptcp_event(MPTCP_EVENT_CREATED, msk, ssk, GFP_ATOMIC);
 }
 
@@ -1137,8 +1141,6 @@ void mptcp_pm_worker(struct mptcp_sock *msk)
 
 	if (mptcp_pm_is_kernel(msk))
 		__mptcp_pm_kernel_worker(msk);
-	else if (mptcp_pm_is_userspace(msk))
-		__mptcp_pm_userspace_worker(msk);
 
 	spin_unlock_bh(&msk->pm.lock);
 }
